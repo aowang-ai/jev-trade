@@ -1,0 +1,24 @@
+{
+  "name": "jev-trader",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@ai-sdk/gateway": "^4.0.85",
+    "@nktkas/hyperliquid": "^0.33.3",
+    "ai": "^7.0.105",
+    "viem": "^2.56.7"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test test"
+  }
+}

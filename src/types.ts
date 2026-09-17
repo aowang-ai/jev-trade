@@ -1,0 +1,122 @@
+export type Action = "buy" | "sell" | "hold";
+export type Side = "buy" | "sell";
+
+export interface Book {
+  block: number;
+  bid: number;
+  ask: number;
+  mid: number;
+  spreadBps: number;
+  /** (bidDepth - askDepth) / (bidDepth + askDepth) within 1% of mid. -1..1 */
+  imbalance: number;
+  levels: { bids: [number, number][]; asks: [number, number][] };
+  depthBps: { [band: string]: { bid: number; ask: number } };
+}
+
+/** This tick's post-only limit order. */
+export interface Quote {
+  side: Side;
+  price: number;
+  size: number;
+  txHash: string | null;
+  cancel: number[];
+  status: "placed" | "reverted" | "sim";
+  orderId: number | null;
+  capped: boolean;
+  unchanged?: boolean;
+}
+
+/** A taker hit one of our resting orders. */
+export interface Fill {
+  side: Side;
+  size: number;
+  price: number;
+  txHash: string | null;
+  orderId: number;
+  simulated: boolean;
+  feeUsd?: number;
+  dir?: "open" | "close" | "flip";
+}
+
+/** Compact all-time mid print. Fills sit on this series, not the decision window. */
+export interface PricePoint {
+  ts: number;
+  mid: number;
+  block?: number;
+  fill?: { side: Side; price: number; size: number; dir?: "open" | "close" | "flip" };
+}
+
+export interface Decision {
+  action: Action;
+  probabilities: { buy: number; sell: number; hold: number };
+  upIn10: number;
+  latencyMs: number;
+  late: boolean;
+}
+
+export interface Position {
+  side: "long" | "short" | "flat";
+  size: number;
+  entryPrice: number | null;
+  leverage: number | null;
+  unrealizedUsd: number;
+  unrealizedSz: number;
+}
+
+export interface Totals {
+  blocks: number;
+  decisions: number;
+  quotes: number;
+  fills: number;
+  reverted: number;
+  lateBlocks: number;
+  jevUsd: number;
+  gasSz: number;
+  gasUsd: number;
+  realizedUsd: number;
+  pnlUsd: number;
+  pnlSz: number;
+  pnlPct: number;
+}
+
+export interface BlockEvent {
+  coin: string;
+  block: number;
+  ts: number;
+  mid: number;
+  bestBid: number;
+  bestAsk: number;
+  spreadBps: number;
+  decision: Decision | null;
+  quote: Quote | null;
+  fill: Fill | null;
+  resting: { bidSz: number; askSz: number };
+  position: Position;
+  totals: Totals;
+}
+
+export interface SleeveMeta {
+  coin: string;
+  pair: string;
+  label: string;
+  wallet: string | null;
+}
+
+export interface Meta {
+  model: string;
+  wallet: string | null;
+  dryRun: boolean;
+  market: string;
+  startedAt: number;
+  venue: string;
+  coin: string;
+  pair: string;
+  explorerTx: string;
+  tickMs: number;
+  sleeves: SleeveMeta[];
+}
+
+export interface Timing {
+  readMs: number;
+  loopMs: number;
+}
