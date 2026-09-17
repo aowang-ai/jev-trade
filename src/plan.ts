@@ -18,6 +18,11 @@ export function parseLeverage(raw: unknown, max: number, fallback: number): numb
   return rungs.reduce((best, x) => (Math.abs(x - seed) < Math.abs(best - seed) ? x : best), rungs[0]!);
 }
 
+/** Close is only a real choice when a position exists. */
+export function liveIntent(positionSide: "long" | "short" | "flat", picked: Intent): Intent {
+  return positionSide === "flat" ? "open" : picked;
+}
+
 export function quoteAction(intent: Intent, bias: Bias): Side {
   if (intent === "open") return bias === "long" ? "buy" : "sell";
   return bias === "long" ? "sell" : "buy";
@@ -35,7 +40,8 @@ export function planQuote(opts: {
       ? { side: quoteAction(opts.intent, opts.bias), size: opts.quoteSz, reduceOnly: false }
       : null;
   }
-  const have = opts.bias === "long" ? Math.max(0, opts.positionSz) : Math.max(0, -opts.positionSz);
-  if (have <= 0) return null;
-  return { side: quoteAction(opts.intent, opts.bias), size: have, reduceOnly: true };
+  // Close flattens the live book. Long/short is the stance, not which side to reduce.
+  if (opts.positionSz > 0) return { side: "sell", size: opts.positionSz, reduceOnly: true };
+  if (opts.positionSz < 0) return { side: "buy", size: -opts.positionSz, reduceOnly: true };
+  return null;
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { leverageRungs, parseLeverage, planQuote, quoteAction } from "../src/plan";
+import { leverageRungs, liveIntent, parseLeverage, planQuote, quoteAction } from "../src/plan";
 
 test("open long buys and open short sells", () => {
   expect(quoteAction("open", "long")).toBe("buy");
@@ -12,17 +12,27 @@ test("open long buys and open short sells", () => {
   });
 });
 
-test("close flattens that side and skips when flat", () => {
-  expect(quoteAction("close", "long")).toBe("sell");
-  expect(quoteAction("close", "short")).toBe("buy");
+test("close flattens the live book and skips when flat", () => {
   expect(planQuote({ intent: "close", bias: "long", positionSz: 0.08, quoteSz: 0.01 })).toEqual({
     side: "sell", size: 0.08, reduceOnly: true,
   });
   expect(planQuote({ intent: "close", bias: "short", positionSz: -0.08, quoteSz: 0.01 })).toEqual({
     side: "buy", size: 0.08, reduceOnly: true,
   });
+  expect(planQuote({ intent: "close", bias: "long", positionSz: -0.08, quoteSz: 0.01 })).toEqual({
+    side: "buy", size: 0.08, reduceOnly: true,
+  });
+  expect(planQuote({ intent: "close", bias: "short", positionSz: 0.08, quoteSz: 0.01 })).toEqual({
+    side: "sell", size: 0.08, reduceOnly: true,
+  });
   expect(planQuote({ intent: "close", bias: "long", positionSz: 0, quoteSz: 0.01 })).toBe(null);
-  expect(planQuote({ intent: "close", bias: "short", positionSz: 0.08, quoteSz: 0.01 })).toBe(null);
+});
+
+test("liveIntent cannot close a flat book", () => {
+  expect(liveIntent("flat", "close")).toBe("open");
+  expect(liveIntent("flat", "open")).toBe("open");
+  expect(liveIntent("long", "close")).toBe("close");
+  expect(liveIntent("short", "open")).toBe("open");
 });
 
 test("leverage rungs follow the coin max", () => {

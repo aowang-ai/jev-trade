@@ -1,6 +1,6 @@
 import { experimental_evaluate as evaluate } from "ai";
 import { config } from "./config";
-import { leverageRungs, parseLeverage, quoteAction, type Bias, type Intent } from "./plan";
+import { leverageRungs, liveIntent, parseLeverage, quoteAction, type Bias, type Intent } from "./plan";
 import type { Action, Side } from "./types";
 
 /** What the model sees. Compact, relative, human-readable. */
@@ -102,43 +102,48 @@ function questions(state: TradeState) {
     levCriteria[String(n)] = `${n}x cross leverage on ${asset}. Higher leverage uses less margin for the same quote and raises liquidation risk.`;
   }
   const ctx = `You trade only ${asset} (${state.market}) on Hyperliquid. position is the live book and PnL (unrealizedUsd, realizedUsd, feesUsd, pnlUsd, pnlPct, liquidationPx). indicators are from 1m closes (sma20, sma50, ema20, rsi14, vol20Bps, rangePos20, midVsSma20Bps). asset is mark/oracle/fundingBps/premiumBps/openInterest/dayChangeBps/dayNtlVlmUsd. trades and book are the live tape. recentFills are this wallet's fills.`;
-  return {
-    bias: {
-      type: "choice",
-      instructions: {
-        question: `Should the ${asset} book be long or short after this tick?`,
-        goal: `Trade ${state.market} on Hyperliquid. You pick long or short. The bot does not flip your side.`,
-        timing: `Ticks are ~${config.tickMs}ms. Current position: ${stance}.`,
-        inputs: ctx,
-      },
-      criteria: {
-        long: `Long ${asset}: mid more likely higher after \`horizonTicks\` ticks, by more than the spread.`,
-        short: `Short ${asset}: mid more likely lower after \`horizonTicks\` ticks, by more than the spread.`,
-      },
+  const bias = {
+    type: "choice",
+    instructions: {
+      question: `Should the ${asset} book be long or short after this tick?`,
+      goal: `Trade ${state.market} on Hyperliquid. You pick long or short. The bot does not flip your side.`,
+      timing: `Ticks are ~${config.tickMs}ms. Current position: ${stance}.`,
+      inputs: ctx,
     },
+    criteria: {
+      long: `Long ${asset}: mid more likely higher after \`horizonTicks\` ticks, by more than the spread.`,
+      short: `Short ${asset}: mid more likely lower after \`horizonTicks\` ticks, by more than the spread.`,
+    },
+  };
+  const leverage = {
+    type: "choice",
+    instructions: {
+      question: `What cross leverage should the ${asset} account use this tick?`,
+      goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x. Read liquidationPx and equity before sizing risk.`,
+      timing: "Leverage is updated on the wallet before the quote is posted.",
+      inputs: `${ctx} Allowed rungs: ${rungs.join(" ")}.`,
+    },
+    criteria: levCriteria,
+  };
+  if (pos.side === "flat") {
+    return { bias, leverage };
+  }
+  return {
+    bias,
     intent: {
       type: "choice",
       instructions: {
-        question: `Open a ${asset} position or close one this tick?`,
-        goal: "Open adds in the long/short you picked. Close flattens that side with a reduce-only quote. Use position PnL and indicators to decide whether to add or flatten.",
+        question: `Add to the ${asset} position or flatten it this tick?`,
+        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is.",
         timing: "The quote is a post-only limit one tick inside the touch. It fills only if a taker hits it.",
         inputs: `${ctx} Current: ${stance}. equity=${pos.equity} withdrawable=${pos.withdrawable} notional=${pos.notionalUsd}.`,
       },
       criteria: {
         open: `Open or add ${asset} on the long/short you picked.`,
-        close: `Close the ${asset} position on the long/short you picked. If that side is flat the quote is skipped.`,
+        close: `Flatten the live ${asset} position.`,
       },
     },
-    leverage: {
-      type: "choice",
-      instructions: {
-        question: `What cross leverage should the ${asset} account use this tick?`,
-        goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x. Read liquidationPx and equity before sizing risk.`,
-        timing: "Leverage is updated on the wallet before the quote is posted.",
-        inputs: `${ctx} Allowed rungs: ${rungs.join(" ")}.`,
-      },
-      criteria: levCriteria,
-    },
+    leverage,
   };
 }
 
@@ -202,9 +207,12 @@ export class JevModel implements Model {
       maxRetries: 0,
     });
     const bias = pick(r.answers.bias?.choice, "long", "short");
-    const intent = pick(r.answers.intent?.choice, "open", "close");
+    const picked = pick(r.answers.intent?.choice, "open", "close");
+    const intent = liveIntent(state.position.side, picked);
     const [longP, shortP] = pairProbs(r.answers.bias, "long", "short");
-    const [openP, closeP] = pairProbs(r.answers.intent, "open", "close");
+    const [openP, closeP] = state.position.side === "flat"
+      ? [1, 0]
+      : pairProbs(r.answers.intent, "open", "close");
     const leverage = parseLeverage(r.answers.leverage?.choice, state.maxLeverage, state.position.leverage ?? 1);
     return pack(intent, bias, leverage, longP, shortP, openP, closeP, performance.now() - t0, r.usage?.inputTokens ?? 0);
   }

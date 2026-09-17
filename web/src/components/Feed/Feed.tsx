@@ -112,9 +112,11 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
               const bias = decision?.bias ? ` ${decision.bias}` : "";
               detail = `${word} ${fmtSize(quote.size)} @ ${fmtPrice(quote.price)}${bias}${lev}${quote.reduceOnly ? " reduce" : ""}`;
               detailMuted = quote.status === "reverted";
-            } else if (decided) {
-              detail = "no quote";
+            } else if (decided && decision?.intent === "close" && event.position.side === "flat") {
+              detail = "already flat";
               detailMuted = true;
+            } else if (decided) {
+              detail = "";
             }
 
             const rowClass = [styles.row, kindClass, i === 0 ? styles.newest : "", fill ? styles.filled : ""]

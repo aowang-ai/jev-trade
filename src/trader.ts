@@ -12,9 +12,9 @@ const emptyTotals = (): Totals => ({
 });
 
 /**
- * Every tick: read the book, ask the model long/short, open/close, and leverage,
- * then post that post-only limit. One request in flight; a tick that arrives while
- * busy is late. Live position and PnL come from Hyperliquid.
+ * Every tick: read the book and ask the model. A tick is late only when Jev
+ * is still answering. Hyperliquid leverage/order I/O runs in the background
+ * so a fill or quote does not stall the next decision.
  */
 export class Trader {
   readonly history: BlockEvent[] = [];
@@ -24,6 +24,8 @@ export class Trader {
   private trades: TradeFeed | null = null;
   private orders = new Map<number, Resting>();
   private simId = 0;
+  private sendSeq = 0;
+  private exchangeTail: Promise<void> = Promise.resolve();
   private position = { sz: 0, costUsd: 0 };
   private totals: Totals = emptyTotals();
 
@@ -65,37 +67,52 @@ export class Trader {
       const decision = await this.model.decide(this.buildState(block, book));
       this.totals.decisions++;
       this.totals.jevUsd += (decision.inputTokens / 1e6) * config.jevUsdPerMTok;
-      await this.market.setLeverage(decision.leverage);
       const plan = planQuote({
         intent: decision.intent,
         bias: decision.bias,
         positionSz: this.position.sz,
         quoteSz: this.market.quoteSize(book.mid),
       });
-
-      let quote: Quote | null = null;
-      if (plan) {
-        const cancel = [...this.orders.keys()].filter((id) => id > 0);
-        quote = await this.market.send(plan.side, plan.size, book, cancel, plan.reduceOnly);
-        if (!quote.unchanged) this.totals.quotes++;
-        if (quote.status === "reverted") {
-          this.totals.reverted++;
-          this.onQuote(block, quote);
-        }
-        if (quote.status === "sim") {
-          this.orders.clear();
-          this.orders.set(--this.simId, { side: plan.side, price: quote.price, size: quote.size, block });
-        } else if (quote.status === "placed" && quote.orderId != null) {
-          this.orders.clear();
-          this.orders.set(quote.orderId, { side: quote.side, price: quote.price, size: quote.size, block });
-        }
-      }
-      this.emit(block, book, decision, quote, false, { readMs: Math.round(readMs), loopMs: Math.round(performance.now() - t0) });
+      this.emit(block, book, decision, null, false, { readMs: Math.round(readMs), loopMs: Math.round(performance.now() - t0) });
+      if (plan) this.enqueueQuote(block, decision, plan, book);
     } catch (e) {
       console.error(`tick ${block}:`, (e as Error).message);
     } finally {
       this.busy = false;
     }
+  }
+
+  private enqueueQuote(
+    block: number,
+    decision: ModelDecision,
+    plan: NonNullable<ReturnType<typeof planQuote>>,
+    book: Book,
+  ) {
+    const seq = ++this.sendSeq;
+    this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
+      if (seq !== this.sendSeq) return;
+      await this.market.setLeverage(decision.leverage);
+      if (seq !== this.sendSeq) return;
+      const cancel = [...this.orders.keys()].filter((id) => id > 0);
+      const quote = await this.market.send(plan.side, plan.size, book, cancel, plan.reduceOnly);
+      if (seq !== this.sendSeq) return;
+      this.applyPosted(block, quote);
+    });
+  }
+
+  private applyPosted(block: number, quote: Quote) {
+    const e = this.history.find((h) => h.block === block);
+    if (e) e.quote = quote;
+    if (!quote.unchanged) this.totals.quotes++;
+    if (quote.status === "reverted") this.totals.reverted++;
+    if (quote.status === "sim") {
+      this.orders.clear();
+      this.orders.set(--this.simId, { side: quote.side, price: quote.price, size: quote.size, block });
+    } else if (quote.status === "placed" && quote.orderId != null) {
+      this.orders.clear();
+      this.orders.set(quote.orderId, { side: quote.side, price: quote.price, size: quote.size, block });
+    }
+    this.onQuote(block, quote);
   }
 
   private harvest() {
