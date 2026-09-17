@@ -15,10 +15,6 @@ export function coinPair(coin: string): string {
   return `${coinLabel(coin)}-USD`;
 }
 
-export function tapePath(label: string): string {
-  return `data/events-${label}.jsonl`;
-}
-
 export function sameCoin(a: string | undefined, b: string): boolean {
   if (!a) return false;
   return a === b || coinLabel(a) === coinLabel(b);

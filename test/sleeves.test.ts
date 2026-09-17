@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { coinDex, coinLabel, coinPair, loadSleeves, parseWalletsJson, sameCoin, tapePath } from "../src/sleeves";
+import { coinDex, coinLabel, coinPair, loadSleeves, parseWalletsJson, sameCoin } from "../src/sleeves";
 
 test("coin helpers split HIP-3 names", () => {
   expect(coinLabel("xyz:NVDA")).toBe("NVDA");
@@ -8,7 +8,6 @@ test("coin helpers split HIP-3 names", () => {
   expect(coinLabel("BTC")).toBe("BTC");
   expect(coinDex("BTC")).toBeUndefined();
   expect(coinPair("ETH")).toBe("ETH-USD");
-  expect(tapePath("ETH")).toBe("data/events-ETH.jsonl");
 });
 
 test("sameCoin matches dex prefix or label", () => {

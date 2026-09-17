@@ -1,6 +1,6 @@
 # jev-trader
 
-Jev watches five Hyperliquid books and answers buy or sell every tick on each one. Each sleeve has its own wallet, Jev call, and $200 margin cap. The bot posts a post-only Alo quote one tick inside the touch. Same side: modify in place. Side flip: cancel and replace. Fills happen when a taker hits it. Position and PnL come from Hyperliquid. Sleeves do not block each other: a late Jev call on BTC does not stall ETH.
+Jev watches five Hyperliquid books and picks long or short, open or close, and leverage every tick on each one. Each sleeve has its own wallet and Jev call. The bot posts a post-only Alo quote one tick inside the touch. Same side: modify in place. Side flip: cancel and replace. Fills happen when a taker hits it. Position and PnL come from Hyperliquid. Sleeves do not block each other: a late Jev call on BTC does not stall ETH.
 
 Two runtimes on purpose: the bot is Bun on port 3000, the dashboard is Next in `web/` on port 3001.
 
@@ -36,7 +36,7 @@ Hyperliquid defaults to testnet. Live testnet orders need a key plus mock USDC f
     src/market.ts    Alo quotes, venue account
     src/account.ts   clearinghouse position and fill PnL
     src/book.ts      ticks, clamp, book from levels
-    src/tape.ts      events-<label>.jsonl mid + Jev tape; fills come from Hyperliquid
+    src/chart.ts     Hyperliquid candles and userFills
     src/trades.ts    print ring, live and sim fills
     src/model.ts     JevModel, MockModel
     src/trader.ts    tick loop and risk
