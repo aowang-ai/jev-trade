@@ -37,7 +37,7 @@
 }
 
 .metaLine {
-  margin-bottom: 10px;
+  margin-left: auto;
   font-size: 12px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -112,5 +112,44 @@
 @media (prefers-reduced-motion: reduce) {
   .fill {
     transition: none;
+  }
+}
+
+@media (max-width: 899.98px) {
+  .body {
+    padding: 8px 12px 10px;
+  }
+
+  .headline {
+    margin-bottom: 0;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .headlineWord {
+    font-size: 16px;
+  }
+
+  .metaLine {
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .bars {
+    display: none;
+  }
+
+  .bookLine {
+    font-size: 12px;
+  }
+
+  .bookSub {
+    font-size: 11px;
+  }
+
+  .stats {
+    margin-top: 6px;
+    gap: 6px 12px;
+    font-size: 10px;
   }
 }

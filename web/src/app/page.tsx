@@ -82,7 +82,6 @@ export default function Page() {
         <div className={styles.left}>
           <div className={styles.chartWrap}>
             <FlowChart
-              key={coin}
               tape={sleeve.tape ?? []}
               events={sleeve.events}
               latest={sleeve.latest}

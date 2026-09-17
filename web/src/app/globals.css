@@ -96,6 +96,7 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 img,
@@ -112,6 +113,15 @@ svg {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+@media (max-width: 899.98px) {
+  .shell {
+    overflow: visible;
+    min-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 @media (min-width: 900px) {

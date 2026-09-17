@@ -17,7 +17,7 @@ export default function Header({ connection, portfolioPnl }: HeaderProps) {
   return (
     <div className={styles.header}>
       <span className={styles.brandLockup}>
-        <Logo size={22} />
+        <Logo size={20} />
         <span className={styles.brand}>JEV TRADE</span>
       </span>
       <span className={styles.status} data-live={live ? "true" : "false"}>

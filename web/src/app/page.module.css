@@ -56,7 +56,8 @@
 
   .chartWrap {
     flex: none;
-    aspect-ratio: 4 / 3;
+    height: min(38vh, 320px);
+    min-height: 240px;
   }
 
   .right {

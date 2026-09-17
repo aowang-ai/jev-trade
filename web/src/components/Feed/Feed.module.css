@@ -182,17 +182,25 @@
 @media (max-width: 899.98px) {
   .list {
     flex: none;
-    height: 390px;
+    height: min(32vh, 220px);
+    min-height: 156px;
   }
-}
 
-@media (max-width: 390px) {
   .lat {
     display: none;
   }
 
+  .word {
+    width: 56px;
+  }
+
   .row {
     gap: 8px;
+  }
+}
+
+@media (max-width: 390px) {
+  .row {
     padding-left: 10px;
     padding-right: 10px;
   }

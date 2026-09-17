@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BlockEvent, Meta, PricePoint } from "@/lib/types";
 import { fmtAxisTime, fmtCall, fmtClock, fmtCoin, fmtPrice } from "@/lib/format";
 import { smoothPath } from "./smooth";
@@ -10,6 +10,11 @@ const PAD_TOP = 68;
 const PAD_BOTTOM = 36;
 const PAD_LEFT = 16;
 const PAD_RIGHT = 78;
+
+function chartPads(width: number) {
+  if (width > 0 && width < 640) return { top: 36, bottom: 20, left: 4, right: 50 };
+  return { top: PAD_TOP, bottom: PAD_BOTTOM, left: PAD_LEFT, right: PAD_RIGHT };
+}
 const MIN_RANGE_PCT = 0.002;
 const TAG_W = 58;
 const LINE_POINTS = 720;
@@ -144,9 +149,9 @@ function nearestFill(pts: PricePoint[], ts: number, maxDt: number): PricePoint |
   return best;
 }
 
-function xFromEvent(ev: { clientX: number }, el: HTMLElement, plotW: number): number {
+function xFromEvent(ev: { clientX: number }, el: HTMLElement, plotW: number, padLeft = PAD_LEFT): number {
   const r = el.getBoundingClientRect();
-  return Math.min(Math.max(ev.clientX - r.left - PAD_LEFT, 0), plotW);
+  return Math.min(Math.max(ev.clientX - r.left - padLeft, 0), plotW);
 }
 
 export default function FlowChart({
@@ -170,22 +175,33 @@ export default function FlowChart({
   const dragRef = useRef<{ x: number; start: number; end: number } | null>(null);
   const pinchRef = useRef<{ dist: number; start: number; end: number; anchor: number } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = panelRef.current;
     if (!el) return;
+    const apply = (width: number, height: number) => {
+      setSize((s) =>
+        Math.abs(s.w - width) < 0.5 && Math.abs(s.h - height) < 0.5
+          ? s
+          : { w: Math.round(width), h: Math.round(height) },
+      );
+    };
+    apply(el.clientWidth, el.clientHeight);
     const ro = new ResizeObserver((entries) => {
       const r = entries[0].contentRect;
-      setSize((s) =>
-        Math.abs(s.w - r.width) < 0.5 && Math.abs(s.h - r.height) < 0.5
-          ? s
-          : { w: Math.round(r.width), h: Math.round(r.height) },
-      );
+      apply(r.width, r.height);
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
+  useEffect(() => {
+    setScale(DEFAULT_SCALE);
+    setView(null);
+    setHover(null);
+  }, [meta?.coin]);
+
   const { w, h } = size;
+  const edge = chartPads(w);
 
   const series = useMemo(() => {
     const src = (tape ?? []).length
@@ -259,8 +275,9 @@ export default function FlowChart({
     const el = panelRef.current;
     const v = resolvedRef.current;
     if (!el || !v) return;
-    const plotW = Math.max(1, el.clientWidth - PAD_LEFT - PAD_RIGHT);
-    const x = xFromEvent({ clientX }, el, plotW);
+    const p = chartPads(el.clientWidth);
+    const plotW = Math.max(1, el.clientWidth - p.left - p.right);
+    const x = xFromEvent({ clientX }, el, plotW, p.left);
     const span = Math.max(1, v.end - v.start);
     const anchor = v.start + (x / plotW) * span;
     const nextSpan = span * factor;
@@ -312,8 +329,8 @@ export default function FlowChart({
   }, []);
 
   const model = useMemo(() => {
-    const plotW = w - PAD_LEFT - PAD_RIGHT;
-    const plotH = h - PAD_TOP - PAD_BOTTOM;
+    const plotW = w - edge.left - edge.right;
+    const plotH = h - edge.top - edge.bottom;
     if (w < 160 || plotH < 60 || plotW < 80) return null;
     if (!series.length || !resolved) return null;
 
@@ -351,14 +368,14 @@ export default function FlowChart({
     lo -= pad;
     hi += pad;
     const range = hi - lo || 1;
-    const fx = (ts: number) => (flat ? PAD_LEFT + plotW : PAD_LEFT + ((ts - t0) / span) * plotW);
-    const fy = (p: number) => PAD_TOP + (1 - (p - lo) / range) * plotH;
+    const fx = (ts: number) => (flat ? edge.left + plotW : edge.left + ((ts - t0) / span) * plotW);
+    const fy = (p: number) => edge.top + (1 - (p - lo) / range) * plotH;
 
     const lineSrc = vis.filter((p) => !p.fill);
     const drawn = lttb(lineSrc.length ? lineSrc : vis, LINE_POINTS);
     const pts = drawn.map((p) => [fx(p.ts), fy(p.mid)] as const);
     const line = smoothPath(pts);
-    const base = h - PAD_BOTTOM;
+    const base = h - edge.bottom;
     const area = pts.length
       ? `${line} L${pts[pts.length - 1]![0].toFixed(1)} ${base} L${pts[0]![0].toFixed(1)} ${base} Z`
       : "";
@@ -396,7 +413,7 @@ export default function FlowChart({
     }
 
     const ticks = [0.25, 0.5, 0.75].map((f) => ({
-      y: PAD_TOP + plotH * f,
+      y: edge.top + plotH * f,
       label: fmtPrice(lo + (1 - f) * range),
     }));
 
@@ -427,7 +444,7 @@ export default function FlowChart({
       endX,
       lastVisible,
     };
-  }, [series, resolved, w, h, events]);
+  }, [series, resolved, w, h, events, edge.top, edge.bottom, edge.left, edge.right]);
 
   const hv = useMemo(() => {
     if (!model || hover === null || dragging) return null;
@@ -435,10 +452,10 @@ export default function FlowChart({
     const p = snap ?? nearest(series, hover);
     if (!p) return null;
     const x = model.fx(p.ts);
-    if (x < PAD_LEFT - 8 || x > PAD_LEFT + model.plotW + 8) return null;
+    if (x < edge.left - 8 || x > edge.left + model.plotW + 8) return null;
     const y = p.fill ? (p.fill.side === "buy" ? model.fy(p.mid) + MARK_LIFT : model.fy(p.mid) - MARK_LIFT) : model.fy(p.mid);
     const flip = x > w - 180;
-    const ty = Math.min(Math.max(y - 88, PAD_TOP - 40), model.base - 78);
+    const ty = Math.min(Math.max(y - 88, edge.top - 40), model.base - 78);
     const coin = meta?.coin ?? "BTC";
       const kind =
         p.fill?.dir === "open" ? "OPEN" : p.fill?.dir === "close" ? "CLOSE" : p.fill?.dir === "flip" ? "FLIP" : "FILL";
@@ -455,7 +472,7 @@ export default function FlowChart({
       trade,
       tint: p.fill ? (p.fill.side === "buy" ? "var(--buy-ink)" : "var(--sell-ink)") : "var(--muted)",
     };
-  }, [model, hover, series, w, meta?.coin, dragging]);
+  }, [model, hover, series, w, meta?.coin, dragging, edge.left, edge.top]);
 
   const shown = latest ?? events[events.length - 1] ?? null;
   const d = shown?.decision ?? null;
@@ -514,7 +531,7 @@ export default function FlowChart({
         }}
         onPointerMove={(ev) => {
           if (dragRef.current) {
-            const plotW = Math.max(1, w - PAD_LEFT - PAD_RIGHT);
+            const plotW = Math.max(1, w - edge.left - edge.right);
             const span = Math.max(1, dragRef.current.end - dragRef.current.start);
             const dt = -((ev.clientX - dragRef.current.x) / plotW) * span;
             applyWindow(dragRef.current.start + dt, dragRef.current.end + dt);
@@ -523,7 +540,7 @@ export default function FlowChart({
           if (ev.pointerType !== "mouse" || !model) return;
           const r = ev.currentTarget.getBoundingClientRect();
           const x = ev.clientX - r.left;
-          setHover(model.t0 + ((x - PAD_LEFT) / Math.max(1, model.plotW)) * model.span);
+          setHover(model.t0 + ((x - edge.left) / Math.max(1, model.plotW)) * model.span);
         }}
         onPointerUp={(ev) => {
           if (dragRef.current) {
@@ -547,10 +564,10 @@ export default function FlowChart({
         }}
         onTouchStart={(ev) => {
           if (ev.touches.length !== 2 || !resolved || !panelRef.current) return;
-          const plotW = Math.max(1, w - PAD_LEFT - PAD_RIGHT);
+          const plotW = Math.max(1, w - edge.left - edge.right);
           const midX =
             (ev.touches[0]!.clientX + ev.touches[1]!.clientX) / 2;
-          const x = xFromEvent({ clientX: midX }, panelRef.current, plotW);
+          const x = xFromEvent({ clientX: midX }, panelRef.current, plotW, edge.left);
           pinchRef.current = {
             dist: Math.hypot(
               ev.touches[0]!.clientX - ev.touches[1]!.clientX,
@@ -577,7 +594,7 @@ export default function FlowChart({
                   <stop offset="100%" stopColor="rgba(0,0,0,0)" />
                 </linearGradient>
                 <clipPath id={`c${gid}`}>
-                  <rect x={PAD_LEFT} y={PAD_TOP - 4} width={model.plotW} height={model.plotH + 8} />
+                  <rect x={edge.left} y={edge.top - 4} width={model.plotW} height={model.plotH + 8} />
                 </clipPath>
               </defs>
 
@@ -600,7 +617,7 @@ export default function FlowChart({
 
               {hv ? (
                 <g>
-                  <line className={styles.cross} x1={hv.x} x2={hv.x} y1={PAD_TOP - 12} y2={model.base + 10} />
+                  <line className={styles.cross} x1={hv.x} x2={hv.x} y1={edge.top - 12} y2={model.base + 10} />
                   <circle className={styles.crossDot} cx={hv.x} cy={hv.y} r="4.5" />
                   <g transform={`translate(${hv.tx.toFixed(1)},${hv.ty.toFixed(1)})`}>
                     <rect className={styles.tip} width="156" height="72" rx="10" />
@@ -623,7 +640,7 @@ export default function FlowChart({
                   className={styles.tick}
                   x={t.x}
                   y={h - 10}
-                  textAnchor={t.x < PAD_LEFT + 20 ? "start" : t.x > w - PAD_RIGHT - 10 ? "end" : "middle"}
+                  textAnchor={t.x < edge.left + 20 ? "start" : t.x > w - edge.right - 10 ? "end" : "middle"}
                 >
                   {t.label}
                 </text>
@@ -644,6 +661,9 @@ export default function FlowChart({
               <div className={styles.price}>{fmtPrice(shown?.mid ?? model.last.mid)}</div>
               <div className={styles.sub}>
                 <span>{meta?.pair ?? "BTC-USD"}</span>
+                <span className={styles.wordMobile} style={{ color: wordColor }}>
+                  {word}
+                </span>
               </div>
             </div>
 
@@ -657,62 +677,61 @@ export default function FlowChart({
               <span className={styles.legBuy}>buy fill</span>
               <span className={styles.legSell}>sell fill</span>
             </div>
-
-            <div className={styles.tools}>
-              {SCALES.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`${styles.tool} ${scale === s.id ? styles.toolOn : ""}`}
-                  aria-pressed={scale === s.id}
-                  onClick={() => {
-                    setScale(s.id);
-                    setView(null);
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`${styles.tool} ${allTime ? styles.toolOn : ""}`}
-                aria-pressed={allTime}
-                onClick={() => {
-                  setScale("ALL");
-                  setView(null);
-                }}
-              >
-                ALL
-              </button>
-              <button
-                type="button"
-                className={styles.tool}
-                aria-label="Zoom in"
-                onClick={() => {
-                  const el = panelRef.current;
-                  if (!el) return;
-                  const r = el.getBoundingClientRect();
-                  zoomAt(r.left + r.width * 0.72, 0.72);
-                }}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className={styles.tool}
-                aria-label="Zoom out"
-                onClick={() => {
-                  const el = panelRef.current;
-                  if (!el) return;
-                  const r = el.getBoundingClientRect();
-                  zoomAt(r.left + r.width * 0.72, 1.38);
-                }}
-              >
-                -
-              </button>
-            </div>
           </>
         )}
+      </div>
+      <div className={styles.tools}>
+        {SCALES.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`${styles.tool} ${scale === s.id ? styles.toolOn : ""}`}
+            aria-pressed={scale === s.id}
+            onClick={() => {
+              setScale(s.id);
+              setView(null);
+            }}
+          >
+            {s.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className={`${styles.tool} ${allTime ? styles.toolOn : ""}`}
+          aria-pressed={allTime}
+          onClick={() => {
+            setScale("ALL");
+            setView(null);
+          }}
+        >
+          ALL
+        </button>
+        <button
+          type="button"
+          className={styles.tool}
+          aria-label="Zoom in"
+          onClick={() => {
+            const el = panelRef.current;
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            zoomAt(r.left + r.width * 0.72, 0.72);
+          }}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className={styles.tool}
+          aria-label="Zoom out"
+          onClick={() => {
+            const el = panelRef.current;
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            zoomAt(r.left + r.width * 0.72, 1.38);
+          }}
+        >
+          -
+        </button>
       </div>
     </div>
   );

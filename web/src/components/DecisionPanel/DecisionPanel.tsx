@@ -68,45 +68,49 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
       <section className={styles.section}>
         <div className={styles.railHead}>CALL</div>
         <div className={styles.body}>
-          <div className={styles.headline} style={{ color: headlineColor }}>
-            <span className={styles.headlineWord}>{headline}</span>
+          <div className={styles.headline}>
+            <span className={styles.headlineWord} style={{ color: headlineColor }}>
+              {headline}
+            </span>
+            {decided && decision ? (
+              <span className={styles.metaLine}>{decision.latencyMs} ms</span>
+            ) : null}
           </div>
-          {decided && decision ? (
-            <div className={styles.metaLine}>{decision.latencyMs} ms</div>
-          ) : null}
 
-          <BarRow
-            label="long"
-            labelColor="var(--buy-ink)"
-            active={decision?.bias === "long"}
-            value={probs.long ?? probs.buy}
-            fill={decision?.bias === "long" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
-            pct={pctOf(probs.long ?? probs.buy)}
-          />
-          <BarRow
-            label="short"
-            labelColor="var(--sell-ink)"
-            active={decision?.bias === "short"}
-            value={probs.short ?? probs.sell}
-            fill={decision?.bias === "short" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
-            pct={pctOf(probs.short ?? probs.sell)}
-          />
-          <BarRow
-            label="open"
-            labelColor="var(--ink)"
-            active={decision?.intent === "open"}
-            value={probs.open ?? 0}
-            fill={decision?.intent === "open" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
-            pct={pctOf(probs.open)}
-          />
-          <BarRow
-            label="close"
-            labelColor="var(--ink)"
-            active={decision?.intent === "close"}
-            value={probs.close ?? 0}
-            fill={decision?.intent === "close" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
-            pct={pctOf(probs.close)}
-          />
+          <div className={styles.bars}>
+            <BarRow
+              label="long"
+              labelColor="var(--buy-ink)"
+              active={decision?.bias === "long"}
+              value={probs.long ?? probs.buy}
+              fill={decision?.bias === "long" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
+              pct={pctOf(probs.long ?? probs.buy)}
+            />
+            <BarRow
+              label="short"
+              labelColor="var(--sell-ink)"
+              active={decision?.bias === "short"}
+              value={probs.short ?? probs.sell}
+              fill={decision?.bias === "short" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
+              pct={pctOf(probs.short ?? probs.sell)}
+            />
+            <BarRow
+              label="open"
+              labelColor="var(--ink)"
+              active={decision?.intent === "open"}
+              value={probs.open ?? 0}
+              fill={decision?.intent === "open" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
+              pct={pctOf(probs.open)}
+            />
+            <BarRow
+              label="close"
+              labelColor="var(--ink)"
+              active={decision?.intent === "close"}
+              value={probs.close ?? 0}
+              fill={decision?.intent === "close" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
+              pct={pctOf(probs.close)}
+            />
+          </div>
         </div>
       </section>
 
