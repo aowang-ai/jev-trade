@@ -10,6 +10,7 @@ export interface VenueAccount {
   accountValue: number;
   withdrawable: number;
   leverage: number | null;
+  liquidationPx: number | null;
 }
 
 export interface ClearinghouseLike {
@@ -22,6 +23,7 @@ export interface ClearinghouseLike {
       entryPx?: string;
       unrealizedPnl?: string;
       leverage?: { type?: string; value?: number };
+      liquidationPx?: string;
     };
   }>;
 }
@@ -72,6 +74,7 @@ export function accountFromClearinghouse(
   const accountValue = Number(state.marginSummary?.accountValue ?? 0);
   const withdrawable = Number(state.withdrawable ?? 0);
   const lev = pos?.leverage?.value != null ? Number(pos.leverage.value) : NaN;
+  const liq = pos?.liquidationPx != null ? Number(pos.liquidationPx) : NaN;
   return {
     positionSz: size,
     entryPrice: size && Number.isFinite(entry) ? entry : null,
@@ -81,6 +84,7 @@ export function accountFromClearinghouse(
     accountValue: Number.isFinite(accountValue) ? accountValue : 0,
     withdrawable: Number.isFinite(withdrawable) ? withdrawable : 0,
     leverage: Number.isFinite(lev) && lev > 0 ? lev : prev?.leverage ?? null,
+    liquidationPx: size && Number.isFinite(liq) && liq > 0 ? liq : null,
   };
 }
 

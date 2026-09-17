@@ -23,7 +23,7 @@ interface State {
 type Action =
   | { type: "snapshot"; meta: Meta | null; historyByCoin: Record<string, BlockEvent[]>; tapeByCoin: Record<string, PricePoint[]> }
   | { type: "block"; event: BlockEvent }
-  | { type: "fill"; coin: string; block: number; fill: Fill }
+  | { type: "fill"; coin: string; block: number; fill: Fill; ts?: number }
   | { type: "quote"; coin: string; block: number; quote: Quote }
   | { type: "connection"; connection: ConnectionState };
 
@@ -51,51 +51,26 @@ function avg(latSum: number, latCount: number): number {
   return latCount > 0 ? Math.round(latSum / latCount) : 0;
 }
 
-function pointFromEvent(e: BlockEvent): PricePoint {
-  return {
-    ts: e.ts,
-    mid: e.mid,
-    block: e.block,
-    fill: e.fill ? { side: e.fill.side, price: e.fill.price, size: e.fill.size, dir: e.fill.dir } : undefined,
-  };
-}
-
-function tapeFromEvents(events: BlockEvent[]): PricePoint[] {
-  return events.map(pointFromEvent);
-}
-
-function upsertPoint(tape: PricePoint[] | undefined, p: PricePoint): PricePoint[] {
+function insertFillPoint(tape: PricePoint[] | undefined, fill: Fill, ts: number): PricePoint[] {
   const cur = tape ?? [];
-  const last = cur.length ? cur[cur.length - 1] : null;
-  if (last && (last.ts === p.ts || (p.block != null && last.block === p.block))) {
-    const next = cur.slice();
-    next[next.length - 1] = { ...last, ...p, fill: p.fill ?? last.fill };
-    return next;
-  }
-  const next = cur.concat(p);
-  return next.length > TAPE_CAP ? next.slice(next.length - TAPE_CAP) : next;
-}
-
-function markFill(tape: PricePoint[] | undefined, fill: Fill, match: { ts?: number; block?: number }): PricePoint[] {
-  const next = (tape ?? []).slice();
   const mark = { side: fill.side, price: fill.price, size: fill.size, dir: fill.dir };
-  if (match.ts != null) {
-    for (let i = next.length - 1; i >= 0; i--) {
-      if (next[i].ts === match.ts) {
-        next[i] = { ...next[i], fill: mark };
-        return next;
-      }
+  for (let i = cur.length - 1; i >= 0; i--) {
+    const p = cur[i]!;
+    if (p.fill && p.ts === ts && p.fill.side === fill.side && p.fill.price === fill.price && p.fill.size === fill.size) {
+      return cur;
     }
   }
-  if (match.block != null) {
-    for (let i = next.length - 1; i >= 0; i--) {
-      if (next[i].block === match.block) {
-        next[i] = { ...next[i], fill: mark };
-        return next;
-      }
+  const point: PricePoint = { ts, mid: fill.price, fill: mark };
+  const next = cur.slice();
+  let idx = next.length;
+  for (let i = 0; i < next.length; i++) {
+    if (next[i]!.ts > ts) {
+      idx = i;
+      break;
     }
   }
-  return next;
+  next.splice(idx, 0, point);
+  return next.length > TAPE_CAP ? next.slice(next.length - TAPE_CAP) : next;
 }
 
 function viewOf(s: SleeveMem): SleeveMem {
@@ -119,7 +94,7 @@ function fromHistory(history: BlockEvent[], tape: PricePoint[]): SleeveMem {
   }
   return viewOf({
     events,
-    tape: tape.length ? tape : tapeFromEvents(events),
+    tape,
     latest: events.length ? events[events.length - 1]! : null,
     avgLatencyMs: 0,
     latSum,
@@ -152,7 +127,6 @@ function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
     return {
       ...s,
       events,
-      tape: upsertPoint(s.tape, pointFromEvent(ev)),
       latest: events[events.length - 1]!,
       latSum,
       latCount,
@@ -181,7 +155,6 @@ function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
   return {
     ...s,
     events,
-    tape: upsertPoint(s.tape, pointFromEvent(ev)),
     latest: ev,
     latSum,
     latCount,
@@ -220,9 +193,10 @@ function reducer(state: State, action: Action): State {
 
     case "fill": {
       const s = state.sleeves[action.coin] ?? emptySleeve();
+      const ts = action.ts ?? Date.now();
       const idx = indexOfBlock(s.events, action.block);
       if (idx < 0) {
-        return replaceSleeve(state, action.coin, { ...s, tape: markFill(s.tape, action.fill, { block: action.block }) });
+        return replaceSleeve(state, action.coin, { ...s, tape: insertFillPoint(s.tape, action.fill, ts) });
       }
       const events = s.events.slice();
       const updated: BlockEvent = { ...events[idx]!, fill: action.fill };
@@ -230,7 +204,7 @@ function reducer(state: State, action: Action): State {
       return replaceSleeve(state, action.coin, {
         ...s,
         events,
-        tape: markFill(s.tape, action.fill, { ts: updated.ts, block: action.block }),
+        tape: insertFillPoint(s.tape, action.fill, ts),
         latest: idx === events.length - 1 ? updated : s.latest,
       });
     }
@@ -404,9 +378,15 @@ export function useFeed(apiUrl: string): FeedState {
         dispatch({ type: "block", event: data as BlockEvent });
       });
       handle("fill", (data) => {
-        const d = (data ?? {}) as { coin?: string; block?: number; fill?: Fill };
-        if (typeof d.coin !== "string" || typeof d.block !== "number" || !d.fill) return;
-        dispatch({ type: "fill", coin: d.coin, block: d.block, fill: d.fill });
+        const d = (data ?? {}) as { coin?: string; block?: number; fill?: Fill; ts?: number };
+        if (typeof d.coin !== "string" || !d.fill) return;
+        dispatch({
+          type: "fill",
+          coin: d.coin,
+          block: typeof d.block === "number" ? d.block : 0,
+          fill: d.fill,
+          ts: typeof d.ts === "number" ? d.ts : undefined,
+        });
       });
       handle("quote", (data) => {
         const d = (data ?? {}) as { coin?: string; block?: number; quote?: Quote };

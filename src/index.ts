@@ -45,6 +45,17 @@ for (const spec of specs) {
         onQuote(spec.coin),
       );
       trader.attachTradeFeed(feed.trades);
+      market.onVenueFill = (p) => {
+        server?.broadcastFill(spec.coin, 0, {
+          side: p.side,
+          size: p.size,
+          price: p.price,
+          txHash: null,
+          orderId: 0,
+          simulated: false,
+          dir: p.dir,
+        }, p.ts);
+      };
       views.push({ coin: spec.coin, history: () => trader.history, tape: () => trader.tape });
       meta.sleeves.push({ coin: spec.coin, pair: spec.pair, label: spec.label, wallet: market.address });
       if (spec === first) {
@@ -70,23 +81,23 @@ if (!views.length) throw new Error("no sleeves started");
 server = startServer(meta, views);
 for (const start of starters) start();
 
-console.log(`jev-trader ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model} tick ${config.tickMs}ms sleeve $${config.sleeveUsd} quote $${config.quoteUsd} :${config.port}`);
+console.log(`jev-trader ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model} tick ${config.tickMs}ms quote $${config.quoteUsd} :${config.port}`);
 
 function onEvent(coin: string) {
   return (e: BlockEvent, t?: Timing) => {
     server?.broadcast(e);
     if (e.decision && !e.decision.late) {
-      const p = e.decision.probabilities;
+      const d = e.decision;
       const q = e.quote;
-      const quote = !q ? " NO QUOTE" : ` ${q.side.toUpperCase()} ${q.size} @ ${q.price}${q.unchanged ? " hold" : q.status === "sim" ? " (sim)" : ` ${q.status}`}`;
-      console.log(`${coin} #${e.block} ${e.mid} b${(p.buy * 100).toFixed(0)} s${(p.sell * 100).toFixed(0)} ${e.decision.latencyMs}ms${quote} pnl $${e.totals.pnlUsd}${t ? ` loop ${t.loopMs}ms` : ""}`);
+      const call = d.intent && d.bias ? `${d.intent} ${d.bias}${d.leverage != null ? ` ${d.leverage}x` : ""}` : d.action;
+      const quote = !q ? " NO QUOTE" : ` ${q.side.toUpperCase()} ${q.size} @ ${q.price}${q.reduceOnly ? " reduce" : ""}${q.unchanged ? " hold" : q.status === "sim" ? " (sim)" : ` ${q.status}`}`;
+      console.log(`${coin} #${e.block} ${e.mid} ${call} ${d.latencyMs}ms${quote} pnl $${e.totals.pnlUsd}${t ? ` loop ${t.loopMs}ms` : ""}`);
     }
   };
 }
 
 function onFill(coin: string) {
   return (block: number, fill: Fill) => {
-    server?.broadcastFill(coin, block, fill);
     const kind = fill.dir === "open" ? "OPEN " : fill.dir === "close" ? "CLOSE " : fill.dir === "flip" ? "FLIP " : "";
     console.log(`${coin} #${block} ${kind}FILL ${fill.side} ${fill.size} @ ${fill.price}${fill.simulated ? " (sim)" : ""}`);
   };

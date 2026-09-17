@@ -15,8 +15,8 @@ type Kind = "buy" | "sell" | "late";
 function kindOf(event: BlockEvent): Kind {
   const d = event.decision;
   if (!d || d.late) return "late";
-  if (d.action === "buy") return "buy";
-  if (d.action === "sell") return "sell";
+  if (d.bias === "short" || d.action === "sell") return "sell";
+  if (d.bias === "long" || d.action === "buy") return "buy";
   return "late";
 }
 
@@ -33,7 +33,15 @@ const KIND_CLASS: Record<Kind, string> = {
   late: styles.kindLate,
 };
 
-const WORD: Record<Kind, string> = { buy: "BUY", sell: "SELL", late: "LATE" };
+function wordOf(event: BlockEvent, kind: Kind): string {
+  const d = event.decision;
+  if (kind === "late") return "LATE";
+  if (d?.intent === "close") return "CLOSE";
+  if (d?.intent === "open") return "OPEN";
+  if (d?.action === "buy") return "BUY";
+  if (d?.action === "sell") return "SELL";
+  return "LATE";
+}
 
 /**
  * One row per tick, newest first. Clock is the tick time to the second. The word is the side
@@ -83,6 +91,10 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
                 ? ""
                 : "conf " +
                   Math.max(
+                    decision.probabilities.long ?? 0,
+                    decision.probabilities.short ?? 0,
+                    decision.probabilities.open ?? 0,
+                    decision.probabilities.close ?? 0,
                     decision.probabilities.buy,
                     decision.probabilities.sell,
                     decision.probabilities.hold,
@@ -96,7 +108,9 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
               detail = `FILL ${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
             } else if (decided && quote) {
               const word = quote.side === "buy" ? "bid" : "ask";
-              detail = `${word} ${fmtSize(quote.size)} @ ${fmtPrice(quote.price)}${quote.capped ? " cap" : ""}`;
+              const lev = decision?.leverage != null ? ` ${decision.leverage}x` : "";
+              const bias = decision?.bias ? ` ${decision.bias}` : "";
+              detail = `${word} ${fmtSize(quote.size)} @ ${fmtPrice(quote.price)}${bias}${lev}${quote.reduceOnly ? " reduce" : ""}`;
               detailMuted = quote.status === "reverted";
             } else if (decided) {
               detail = "no quote";
@@ -110,7 +124,7 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
             return (
               <div key={event.block} className={rowClass}>
                 <span className={`${styles.cell} ${styles.time}`}>{fmtClock(event.ts, true)}</span>
-                <span className={`${styles.cell} ${styles.word}`}>{WORD[kind]}</span>
+                <span className={`${styles.cell} ${styles.word}`}>{wordOf(event, kind)}</span>
                 <span className={`${styles.cell} ${styles.conf}`}>{conf}</span>
                 <span className={`${styles.cell} ${styles.lat}`}>{lat}</span>
                 <span

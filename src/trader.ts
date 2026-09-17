@@ -1,8 +1,8 @@
 import { config } from "./config";
+import { bpsBetween, snapshotIndicators, venueFeatures } from "./indicators";
 import type { Market } from "./market";
 import type { Model, ModelDecision, TradeState } from "./model";
-import { tapePath } from "./sleeves";
-import { appendEvent, loadTape, markTapeFill, stampFills } from "./tape";
+import { planQuote } from "./plan";
 import { aggregateFills, emptySummary, takeLiveFills, takeSimFills, type Resting, type TradeFeed } from "./trades";
 import type { BlockEvent, Book, Fill, PricePoint, Quote, Side, Timing, Totals } from "./types";
 
@@ -11,36 +11,13 @@ const emptyTotals = (): Totals => ({
   jevUsd: 0, gasSz: 0, gasUsd: 0, realizedUsd: 0, pnlUsd: 0, pnlSz: 0, pnlPct: 0,
 });
 
-export function allowQuote(opts: {
-  side: Side;
-  size: number;
-  positionSz: number;
-  restingBuy: number;
-  restingSell: number;
-  maxPosition: number;
-  hasWallet: boolean;
-  marginUsdc: number;
-  px: number;
-  leverage: number;
-}): boolean {
-  const exposure = opts.side === "buy"
-    ? opts.positionSz + opts.restingBuy + opts.size
-    : opts.positionSz - opts.restingSell - opts.size;
-  const over = Math.abs(exposure) > opts.maxPosition;
-  const reducing = Math.abs(exposure) < Math.abs(opts.positionSz);
-  if (over && !reducing) return false;
-  if (!opts.hasWallet) return true;
-  return opts.marginUsdc >= (opts.size * opts.px) / Math.max(1, opts.leverage);
-}
-
 /**
- * Every tick: read the book, ask the model buy or sell, post one post-only limit
- * on that side. One request in flight; a tick that arrives while busy is late.
- * Live position and PnL come from Hyperliquid. Dry run simulates fills against the tape.
+ * Every tick: read the book, ask the model long/short, open/close, and leverage,
+ * then post that post-only limit. One request in flight; a tick that arrives while
+ * busy is late. Live position and PnL come from Hyperliquid.
  */
 export class Trader {
   readonly history: BlockEvent[] = [];
-  readonly tape: PricePoint[] = [];
   private mids: number[] = [];
   private busy = false;
   private lastBook: Book | null = null;
@@ -49,7 +26,6 @@ export class Trader {
   private simId = 0;
   private position = { sz: 0, costUsd: 0 };
   private totals: Totals = emptyTotals();
-  private tapeFile = "data/events.jsonl";
 
   constructor(
     private market: Market,
@@ -57,13 +33,10 @@ export class Trader {
     private onEvent: (e: BlockEvent, timing?: Timing) => void,
     private onFill: (block: number, fill: Fill) => void = () => {},
     private onQuote: (block: number, quote: Quote) => void = () => {},
-  ) {
-    const named = tapePath(market.label);
-    const legacy = market.label === "BTC" ? loadTape("data/events.jsonl") : [];
-    this.tape.push(...loadTape(named));
-    if (!this.tape.length && legacy.length) this.tape.push(...legacy);
-    stampFills(this.tape, market.fillPrints);
-    this.tapeFile = named;
+  ) {}
+
+  get tape(): PricePoint[] {
+    return this.market.chartPoints;
   }
 
   attachTradeFeed(feed: TradeFeed) {
@@ -88,19 +61,22 @@ export class Trader {
       if (this.mids.length > 400) this.mids.shift();
       this.harvest();
 
+      this.syncFromVenue();
       const decision = await this.model.decide(this.buildState(block, book));
-      const wanted: Side = decision.action === "sell" ? "sell" : "buy";
-      const other: Side = wanted === "buy" ? "sell" : "buy";
-      let side: Side | null = this.allowed(wanted, book) ? wanted : this.allowed(other, book) ? other : null;
-      if (side && this.market.quoteSize(book.mid) <= 0) side = null;
       this.totals.decisions++;
       this.totals.jevUsd += (decision.inputTokens / 1e6) * config.jevUsdPerMTok;
+      await this.market.setLeverage(decision.leverage);
+      const plan = planQuote({
+        intent: decision.intent,
+        bias: decision.bias,
+        positionSz: this.position.sz,
+        quoteSz: this.market.quoteSize(book.mid),
+      });
 
       let quote: Quote | null = null;
-      if (side) {
-        decision.action = side;
+      if (plan) {
         const cancel = [...this.orders.keys()].filter((id) => id > 0);
-        quote = await this.market.send(side, this.market.quoteSize(book.mid), book, cancel, side !== wanted);
+        quote = await this.market.send(plan.side, plan.size, book, cancel, plan.reduceOnly);
         if (!quote.unchanged) this.totals.quotes++;
         if (quote.status === "reverted") {
           this.totals.reverted++;
@@ -108,7 +84,7 @@ export class Trader {
         }
         if (quote.status === "sim") {
           this.orders.clear();
-          this.orders.set(--this.simId, { side, price: quote.price, size: quote.size, block });
+          this.orders.set(--this.simId, { side: plan.side, price: quote.price, size: quote.size, block });
         } else if (quote.status === "placed" && quote.orderId != null) {
           this.orders.clear();
           this.orders.set(quote.orderId, { side: quote.side, price: quote.price, size: quote.size, block });
@@ -136,7 +112,6 @@ export class Trader {
       const fill = aggregateFills(fs);
       const e = this.history.find((h) => h.block === block);
       if (e) e.fill = fill;
-      markTapeFill(this.tape, { side: fill.side, price: fill.price, size: fill.size, dir: fill.dir }, { ts: e?.ts, block });
       this.onFill(block, fill);
     }
     this.market.refresh().catch(() => {});
@@ -148,30 +123,26 @@ export class Trader {
     return sz;
   }
 
-  private allowed(side: Side, book: Book) {
-    this.syncFromVenue();
-    return allowQuote({
-      side,
-      size: this.market.quoteSize(book.mid),
-      positionSz: this.position.sz,
-      restingBuy: this.restingSz("buy"),
-      restingSell: this.restingSz("sell"),
-      maxPosition: this.market.maxPositionSz(book.mid),
-      hasWallet: Boolean(this.market.wallet),
-      marginUsdc: this.market.margin.usdc,
-      px: side === "buy" ? book.ask : book.bid,
-      leverage: config.hlLeverage,
-    });
-  }
-
   private buildState(block: number, book: Book): TradeState {
+    this.syncFromVenue();
     const m = this.mids, n = m.length, H = config.horizonBlocks;
     const ret = (k: number) => (n > k ? ((m[n - 1]! - m[n - 1 - k]!) / m[n - 1 - k]!) * 10_000 : 0);
     const sampled = m.slice(-H).filter((_, i, a) => (a.length - 1 - i) % 5 === 0);
     const lvl = (l: [number, number]) => `${l[0].toFixed(6)} x ${round(l[1], 1)}`;
     const depth: TradeState["depth"] = {};
     for (const [k, v] of Object.entries(book.depthBps)) depth[k + "bps"] = { bid: round(v.bid, 1), ask: round(v.ask, 1) };
+    const posSz = this.position.sz;
+    const a = this.market.account;
+    const entry = this.entryPrice();
+    const unrealized = a ? a.unrealizedUsd : this.unrealizedUsd(book.mid);
+    const realized = a ? a.realizedUsd : this.totals.realizedUsd;
+    const fees = a ? a.feesUsd : this.totals.gasUsd;
+    const equity = a?.accountValue ?? 0;
+    const pnlUsd = realized + unrealized - fees;
+    const indicators = snapNums(snapshotIndicators(this.market.candleCloses(80), book.mid));
+    const asset = snapNums(venueFeatures(this.market.assetCtx, book.mid));
     return {
+      coin: this.market.coin,
       market: this.market.pair,
       tick: block,
       horizonTicks: H,
@@ -185,7 +156,27 @@ export class Trader {
       recentMids: sampled.map((x) => x.toFixed(6)).join(" "),
       trades: this.trades ? this.trades.summary(H, block) : emptySummary(),
       recentTrades: (this.trades?.recent(10) ?? []).map((t) => `${t.block} ${t.side} ${round(t.size, 1)} @ ${t.price.toFixed(6)}`),
-      allowed: { buy: this.allowed("buy", book), sell: this.allowed("sell", book) },
+      recentFills: this.market.fillPrints.slice(-8).map((f) => `${f.side} ${round(f.size, 6)} @ ${f.price}${f.dir ? ` ${f.dir}` : ""}`),
+      position: {
+        coin: this.market.coin,
+        side: posSz > 0 ? "long" : posSz < 0 ? "short" : "flat",
+        size: round(Math.abs(posSz), 8),
+        notionalUsd: round(Math.abs(posSz) * book.mid, 4),
+        entry,
+        leverage: a?.leverage ?? null,
+        liquidationPx: a?.liquidationPx ?? null,
+        distanceBps: rnull(bpsBetween(entry, book.mid), 2),
+        unrealizedUsd: round(unrealized, 4),
+        realizedUsd: round(realized, 4),
+        feesUsd: round(fees, 4),
+        pnlUsd: round(pnlUsd, 4),
+        pnlPct: round(equity ? (pnlUsd / equity) * 100 : 0, 4),
+        equity: round(equity, 4),
+        withdrawable: round(this.market.margin.usdc, 4),
+      },
+      indicators,
+      asset: { ...asset, maxLeverage: this.market.maxLeverage },
+      maxLeverage: this.market.maxLeverage,
     };
   }
 
@@ -237,7 +228,16 @@ export class Trader {
       block, ts: Date.now(), mid: book.mid, bestBid: book.bid, bestAsk: book.ask, spreadBps: round(book.spreadBps, 2),
       decision: late
         ? { action: "hold", probabilities: { buy: 0, sell: 0, hold: 1 }, upIn10: 0.5, latencyMs: 0, late: true }
-        : decision && { action: decision.action, probabilities: decision.probabilities, upIn10: decision.upIn10, latencyMs: Math.round(decision.latencyMs), late: false },
+        : decision && {
+          action: decision.action,
+          intent: decision.intent,
+          bias: decision.bias,
+          leverage: decision.leverage,
+          probabilities: decision.probabilities,
+          upIn10: decision.upIn10,
+          latencyMs: Math.round(decision.latencyMs),
+          late: false,
+        },
       quote,
       fill: null,
       resting: { bidSz: round(this.restingSz("buy"), this.market.szDecimals), askSz: round(this.restingSz("sell"), this.market.szDecimals) },
@@ -245,7 +245,7 @@ export class Trader {
         side: this.position.sz > 0 ? "long" : this.position.sz < 0 ? "short" : "flat",
         size,
         entryPrice: this.entryPrice(),
-        leverage: a?.leverage ?? config.hlLeverage,
+        leverage: a?.leverage ?? decision?.leverage ?? null,
         unrealizedUsd: round(unrealized, 6),
         unrealizedSz: round(unrealized / book.mid, 8),
       },
@@ -253,9 +253,17 @@ export class Trader {
     };
     this.history.push(event);
     if (this.history.length > config.historySize) this.history.shift();
-    appendEvent(this.tape, event, this.tapeFile);
     this.onEvent(event, timing);
   }
 }
 
 const round = (x: number, d: number) => Math.round(x * 10 ** d) / 10 ** d;
+const rnull = (x: number | null, d: number) => (x == null || !Number.isFinite(x) ? null : round(x, d));
+
+function snapNums<T extends Record<string, number | null>>(obj: T): T {
+  const out = { ...obj };
+  for (const [k, v] of Object.entries(out)) {
+    (out as Record<string, number | null>)[k] = typeof v === "number" ? round(v, 6) : v;
+  }
+  return out;
+}

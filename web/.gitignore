@@ -4,3 +4,4 @@ node_modules
 !.env.example
 next-env.d.ts
 tsconfig.tsbuildinfo
+.vercel

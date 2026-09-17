@@ -5,8 +5,8 @@ export type {
   PricePoint,
   Quote,
   SleeveMeta,
-} from "../../../src/types";
-import type { BlockEvent, Meta, PricePoint } from "../../../src/types";
+} from "./bot-types";
+import type { BlockEvent, Meta, PricePoint } from "./bot-types";
 
 export type ConnectionState = "connecting" | "live" | "reconnecting";
 

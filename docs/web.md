@@ -15,11 +15,11 @@ Dev server is port 3001 so it does not collide with the bot on 3000.
 ## Config
 
 Copy `.env.example` to `.env.local`. `NEXT_PUBLIC_API_URL` points at the bot
-(default `https://jev-trader-production.up.railway.app`). The app opens an
-EventSource on `$NEXT_PUBLIC_API_URL/events`.
+(default `http://localhost:3000`). The app opens an EventSource on
+`$NEXT_PUBLIC_API_URL/events`. On Vercel, set it to your Railway URL.
 
-Wire types live in `../src/types.ts`. The dashboard imports them as types
-only, so the Next build does not need a copied file.
+Wire types live in `src/types.ts` on the bot. The dashboard keeps a copy in
+`web/src/lib/bot-types.ts` so the Vercel build does not need the repo root.
 
 ## Layout
 

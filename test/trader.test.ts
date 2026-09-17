@@ -1,34 +1,34 @@
 import { expect, test } from "bun:test";
-import { allowQuote } from "../src/trader";
+import { leverageRungs, parseLeverage, planQuote, quoteAction } from "../src/plan";
 
-const base = {
-  size: 0.001,
-  positionSz: 0,
-  restingBuy: 0,
-  restingSell: 0,
-  maxPosition: 0.01,
-  hasWallet: false,
-  marginUsdc: 100,
-  px: 76000,
-  leverage: 3,
-};
-
-test("allowQuote accepts both sides when flat and under cap", () => {
-  expect(allowQuote({ ...base, side: "buy" })).toBe(true);
-  expect(allowQuote({ ...base, side: "sell" })).toBe(true);
+test("open long buys and open short sells", () => {
+  expect(quoteAction("open", "long")).toBe("buy");
+  expect(quoteAction("open", "short")).toBe("sell");
+  expect(planQuote({ intent: "open", bias: "long", positionSz: -2, quoteSz: 0.01 })).toEqual({
+    side: "buy", size: 0.01, reduceOnly: false,
+  });
+  expect(planQuote({ intent: "open", bias: "short", positionSz: 2, quoteSz: 0.01 })).toEqual({
+    side: "sell", size: 0.01, reduceOnly: false,
+  });
 });
 
-test("allowQuote blocks adding when already at max position", () => {
-  expect(allowQuote({ ...base, side: "buy", positionSz: 0.01 })).toBe(false);
-  expect(allowQuote({ ...base, side: "sell", positionSz: 0.01 })).toBe(true);
+test("close flattens that side and skips when flat", () => {
+  expect(quoteAction("close", "long")).toBe("sell");
+  expect(quoteAction("close", "short")).toBe("buy");
+  expect(planQuote({ intent: "close", bias: "long", positionSz: 0.08, quoteSz: 0.01 })).toEqual({
+    side: "sell", size: 0.08, reduceOnly: true,
+  });
+  expect(planQuote({ intent: "close", bias: "short", positionSz: -0.08, quoteSz: 0.01 })).toEqual({
+    side: "buy", size: 0.08, reduceOnly: true,
+  });
+  expect(planQuote({ intent: "close", bias: "long", positionSz: 0, quoteSz: 0.01 })).toBe(null);
+  expect(planQuote({ intent: "close", bias: "short", positionSz: 0.08, quoteSz: 0.01 })).toBe(null);
 });
 
-test("allowQuote lets a reducing order through even when over cap", () => {
-  expect(allowQuote({ ...base, side: "sell", positionSz: 0.02, maxPosition: 0.01 })).toBe(true);
-  expect(allowQuote({ ...base, side: "buy", positionSz: 0.02, maxPosition: 0.01 })).toBe(false);
-});
-
-test("allowQuote needs margin when a wallet is live", () => {
-  expect(allowQuote({ ...base, side: "buy", hasWallet: true, marginUsdc: 0 })).toBe(false);
-  expect(allowQuote({ ...base, side: "buy", hasWallet: true, marginUsdc: 50 })).toBe(true);
+test("leverage rungs follow the coin max", () => {
+  expect(leverageRungs(10)).toEqual([1, 2, 3, 5, 10]);
+  expect(leverageRungs(50)).toEqual([1, 2, 3, 5, 10, 20, 40, 50]);
+  expect(leverageRungs(15)).toEqual([1, 2, 3, 5, 10, 15]);
+  expect(parseLeverage("7", 10, 1)).toBe(5);
+  expect(parseLeverage("50", 10, 1)).toBe(10);
 });

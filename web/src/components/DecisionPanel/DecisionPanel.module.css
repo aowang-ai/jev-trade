@@ -67,7 +67,7 @@
 }
 
 .label {
-  width: 44px;
+  width: 52px;
   flex: none;
   display: inline-block;
   font-family: var(--font-sans), Inter, system-ui, sans-serif;

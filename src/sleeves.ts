@@ -31,15 +31,23 @@ export interface SleeveConfig {
   privateKey?: string;
 }
 
-function keysFromWalletsFile(): Map<string, string> {
+type WalletFile = { sleeves?: { coin?: string; privateKey?: string }[] };
+
+/** Parse `.wallets.json` or `WALLETS_JSON`. Env overlays the file. */
+export function parseWalletsJson(raw: string): Map<string, string> {
   const out = new Map<string, string>();
-  if (!existsSync(".wallets.json")) return out;
   try {
-    const raw = JSON.parse(readFileSync(".wallets.json", "utf8")) as {
-      sleeves?: { coin?: string; privateKey?: string }[];
-    };
-    for (const s of raw.sleeves ?? []) {
-      if (s.coin && s.privateKey) out.set(s.coin, s.privateKey);
+    const parsed = JSON.parse(raw) as WalletFile | Record<string, string>;
+    if (parsed && typeof parsed === "object" && Array.isArray((parsed as WalletFile).sleeves)) {
+      for (const s of (parsed as WalletFile).sleeves ?? []) {
+        if (s.coin && s.privateKey) out.set(s.coin, s.privateKey);
+      }
+      return out;
+    }
+    if (parsed && typeof parsed === "object") {
+      for (const [coin, key] of Object.entries(parsed as Record<string, string>)) {
+        if (coin && typeof key === "string" && key) out.set(coin, key);
+      }
     }
   } catch {
     // ignore junk
@@ -47,13 +55,31 @@ function keysFromWalletsFile(): Map<string, string> {
   return out;
 }
 
-/** BTC uses PRIVATE_KEY. The rest read `.wallets.json` by coin. */
+function loadWalletKeys(): Map<string, string> {
+  const out = new Map<string, string>();
+  if (existsSync(".wallets.json")) {
+    try {
+      for (const [coin, key] of parseWalletsJson(readFileSync(".wallets.json", "utf8"))) {
+        out.set(coin, key);
+      }
+    } catch {
+      // ignore junk
+    }
+  }
+  const fromEnv = process.env.WALLETS_JSON;
+  if (fromEnv) {
+    for (const [coin, key] of parseWalletsJson(fromEnv)) out.set(coin, key);
+  }
+  return out;
+}
+
+/** First coin can use PRIVATE_KEY. Others use WALLETS_JSON or `.wallets.json`. */
 export function loadSleeves(): SleeveConfig[] {
   const listed = (process.env.HL_COINS ?? "BTC,ETH,SOL,DOGE,BNB")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const file = keysFromWalletsFile();
+  const file = loadWalletKeys();
   const source = process.env.PRIVATE_KEY;
   return listed.map((coin, i) => {
     const fromFile = file.get(coin);

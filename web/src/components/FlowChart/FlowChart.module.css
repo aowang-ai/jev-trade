@@ -46,8 +46,46 @@
 }
 
 .mark {
-  stroke: var(--panel);
+  stroke: #fff;
   stroke-width: 1;
+}
+
+.markQuote {
+  stroke: #fff;
+  stroke-width: 1.2;
+  opacity: 0.55;
+}
+
+.legend {
+  position: absolute;
+  right: 22px;
+  bottom: 28px;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  font: 500 11px var(--font-sans), sans-serif;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.legBuy::before,
+.legSell::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 4px;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  vertical-align: 1px;
+}
+
+.legBuy::before {
+  border-bottom: 5px solid var(--buy);
+}
+
+.legSell::before {
+  border-top: 5px solid var(--sell);
 }
 
 .grid {
@@ -169,20 +207,28 @@
   bottom: 28px;
   z-index: 2;
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: calc(100% - 160px);
 }
 
 .tool {
-  height: 26px;
-  min-width: 26px;
-  padding: 0 10px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
   color: var(--ink);
-  font: 500 13px var(--font-sans), sans-serif;
+  font: 500 11px var(--font-sans), sans-serif;
   line-height: 1;
   cursor: pointer;
+}
+
+.toolOn {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {

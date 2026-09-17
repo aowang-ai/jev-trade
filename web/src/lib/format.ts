@@ -57,6 +57,18 @@ export function fmtPosition(
   return `${pos.side} ${fmtCoin(pos.size, label, 4)}${lev}${entry}`;
 }
 
+/** "OPEN LONG" */
+export function fmtCall(d: {
+  action?: string;
+  intent?: string;
+  bias?: string;
+} | null | undefined): string {
+  if (!d) return "";
+  if (d.intent && d.bias) return `${d.intent} ${d.bias}`.toUpperCase();
+  if (d.action && d.action !== "hold") return d.action.toUpperCase();
+  return "";
+}
+
 /** 0.62 -> "62%" */
 export function fmtPct(p: number | null | undefined): string {
   return `${Math.round(safe(p) * 100)}%`;

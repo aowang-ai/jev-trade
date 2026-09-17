@@ -11,7 +11,7 @@ import { useFeed } from "@/lib/useFeed";
 import type { BlockEvent, Meta, SleeveFeed } from "@/lib/types";
 import styles from "./page.module.css";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://jev-trader-production.up.railway.app";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 const EMPTY: SleeveFeed = { events: [], tape: [], latest: null, avgLatencyMs: 0 };
 

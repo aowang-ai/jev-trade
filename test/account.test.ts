@@ -12,6 +12,7 @@ const state = {
         entryPx: "77180",
         unrealizedPnl: "-1.23",
         leverage: { type: "cross", value: 3 },
+        liquidationPx: "82000",
       },
     },
   ],
@@ -26,6 +27,7 @@ test("accountFromClearinghouse reads HL position and mark pnl", () => {
   expect(a.withdrawable).toBeCloseTo(546.14, 6);
   expect(a.realizedUsd).toBe(0);
   expect(a.leverage).toBe(3);
+  expect(a.liquidationPx).toBe(82000);
 });
 
 test("accountFromClearinghouse is flat when the coin is missing", () => {

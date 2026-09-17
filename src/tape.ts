@@ -77,12 +77,12 @@ export function markTapeFill(
   tape: PricePoint[],
   fill: NonNullable<PricePoint["fill"]>,
   match: { ts?: number; block?: number },
-) {
+): boolean {
   if (match.ts != null) {
     for (let i = tape.length - 1; i >= 0; i--) {
       if (tape[i]!.ts === match.ts) {
         tape[i] = { ...tape[i]!, fill };
-        return;
+        return true;
       }
     }
   }
@@ -90,8 +90,12 @@ export function markTapeFill(
     for (let i = tape.length - 1; i >= 0; i--) {
       if (tape[i]!.block === match.block) {
         tape[i] = { ...tape[i]!, fill };
-        return;
+        return true;
       }
     }
   }
+  const ts = match.ts;
+  if (ts == null || !Number.isFinite(ts)) return false;
+  stampFills(tape, [{ ts, ...fill }]);
+  return true;
 }

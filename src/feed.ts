@@ -2,6 +2,8 @@ import { config } from "./config";
 import type { Book } from "./types";
 import { fillDir, type ClearinghouseLike, type FillPnlLike } from "./account";
 import { bookFromLevels } from "./book";
+import { CHART_INTERVAL, VenueChart } from "./chart";
+import { parseAssetCtx, type AssetCtx } from "./indicators";
 import { coinDex, sameCoin } from "./sleeves";
 import { TradeFeed } from "./trades";
 
@@ -16,6 +18,8 @@ const WS_URL = (testnet: boolean) =>
  */
 export class Feed {
   readonly trades = new TradeFeed();
+  readonly chart = new VenueChart();
+  assetCtx: AssetCtx | null = null;
   book: Book | null = null;
   tick = 0;
   onGone: ((oid: number) => void) | null = null;
@@ -32,10 +36,15 @@ export class Feed {
 
   async connect(): Promise<void> {
     await this.snapshot();
+    await this.chart.loadCandles(this.coin).catch((e) => {
+      console.warn(`${this.coin} candles: ${(e as Error).message.slice(0, 160)}`);
+    });
+    this.pollAssetCtx().catch(() => {});
     this.openSocket();
     setInterval(() => this.maybeTick(), config.tickMs);
     setInterval(() => { if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this.snapshot().catch(() => {}); }, 2_000);
     setInterval(() => this.pollTrades().catch(() => {}), 2_000);
+    setInterval(() => this.pollAssetCtx().catch(() => {}), 15_000);
     this.pollTrades().catch(() => {});
   }
 
@@ -69,6 +78,8 @@ export class Feed {
       ws.onopen = () => {
         this.send({ method: "subscribe", subscription: { type: "l2Book", coin: this.coin, fast: true } });
         this.send({ method: "subscribe", subscription: { type: "trades", coin: this.coin } });
+        this.send({ method: "subscribe", subscription: { type: "candle", coin: this.coin, interval: CHART_INTERVAL } });
+        this.send({ method: "subscribe", subscription: { type: "activeAssetCtx", coin: this.coin } });
         this.subscribeUser();
         if (this.ping) clearInterval(this.ping);
         this.ping = setInterval(() => this.send({ method: "ping" }), 20_000);
@@ -112,6 +123,17 @@ export class Feed {
       for (const t of prints) this.ingestPrint(t);
       return;
     }
+    if (m.channel === "candle") {
+      const rows = Array.isArray(m.data) ? m.data : m.data ? [m.data] : [];
+      for (const c of rows) this.chart.upsertCandle(c);
+      return;
+    }
+    if (m.channel === "activeAssetCtx" && m.data) {
+      const coin = m.data.coin ?? m.data.ctx?.coin;
+      if (coin && !sameCoin(coin, this.coin)) return;
+      this.assetCtx = parseAssetCtx(m.data.ctx ?? m.data);
+      return;
+    }
     if (m.channel === "userFills" && m.data) {
       for (const f of m.data.fills ?? []) {
         if (!sameCoin(f.coin, this.coin)) continue;
@@ -143,6 +165,22 @@ export class Feed {
         if (u.status === "filled" || u.status === "canceled" || u.status === "rejected") this.onGone?.(u.order.oid);
       }
     }
+  }
+
+  private async pollAssetCtx() {
+    const res = await fetch(INFO_URL(config.hlTestnet), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+    });
+    if (!res.ok) return;
+    const pair = (await res.json()) as [{ universe?: { name?: string }[] }, unknown[]];
+    if (!Array.isArray(pair) || pair.length < 2) return;
+    const uni = pair[0]?.universe;
+    const ctxs = pair[1];
+    if (!Array.isArray(uni) || !Array.isArray(ctxs)) return;
+    const i = uni.findIndex((u) => u.name === this.coin);
+    if (i >= 0) this.assetCtx = parseAssetCtx(ctxs[i]);
   }
 
   private async pollTrades() {

@@ -1,7 +1,7 @@
 "use client";
 
 import type { BlockEvent, Meta } from "@/lib/types";
-import { fmtPct, fmtPosition, fmtSignedUsd } from "@/lib/format";
+import { fmtCall, fmtPct, fmtPosition, fmtSignedUsd } from "@/lib/format";
 import styles from "./DecisionPanel.module.css";
 
 export interface DecisionPanelProps {
@@ -9,7 +9,7 @@ export interface DecisionPanelProps {
   meta?: Meta | null;
 }
 
-type Chosen = "buy" | "sell" | null;
+type Chosen = "buy" | "sell" | "long" | "short" | "open" | "close" | null;
 
 interface BarRowProps {
   label: string;
@@ -54,20 +54,20 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
   // "hold" is treated as a non-decision, exactly as the feed does.
   const chosen: Chosen =
     decision && !decision.late && decision.action !== "hold"
-      ? decision.action
+      ? (decision.bias ?? decision.action)
       : null;
 
   const probs = decision?.probabilities ?? { buy: 0, sell: 0, hold: 0 };
   const decided = decision !== null && !late && chosen !== null;
-  const pctOf = (p: number) => (decided ? fmtPct(p) : "-");
+  const pctOf = (p: number | undefined) => (decided ? fmtPct(p ?? 0) : "-");
 
-  const headline = chosen ? (chosen === "buy" ? "BUY" : "SELL") : "LATE";
+  const headline = decided ? (fmtCall(decision) || "LATE") : "LATE";
   const headlineColor = chosen
-    ? chosen === "buy"
-      ? "var(--buy-ink)"
-      : "var(--sell-ink)"
+    ? (decision?.bias ?? decision?.action) === "short" || decision?.action === "sell"
+      ? "var(--sell-ink)"
+      : "var(--buy-ink)"
     : "var(--late-ink)";
-  const headlinePct = chosen ? fmtPct(probs[chosen]) : "";
+  const headlinePct = decided && decision?.leverage != null ? `${decision.leverage}x` : "";
 
   const pos = latest?.position;
   const coin = meta?.coin ?? "BTC";
@@ -95,7 +95,7 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
 
       <section className={styles.section}>
         <div className={`${styles.sectionLabel} ${styles.sectionLabelGap}`}>
-          WHICH SIDE THIS TICK?
+          WHAT JEV PICKED
         </div>
 
         <div className={styles.headline} style={{ color: headlineColor }}>
@@ -106,20 +106,36 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
         </div>
 
         <BarRow
-          label="buy"
+          label="long"
           labelColor="var(--buy-ink)"
-          active={chosen === "buy"}
-          value={probs.buy}
-          fill={chosen === "buy" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
-          pct={pctOf(probs.buy)}
+          active={decision?.bias === "long"}
+          value={probs.long ?? probs.buy}
+          fill={decision?.bias === "long" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
+          pct={pctOf(probs.long ?? probs.buy)}
         />
         <BarRow
-          label="sell"
+          label="short"
           labelColor="var(--sell-ink)"
-          active={chosen === "sell"}
-          value={probs.sell}
-          fill={chosen === "sell" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
-          pct={pctOf(probs.sell)}
+          active={decision?.bias === "short"}
+          value={probs.short ?? probs.sell}
+          fill={decision?.bias === "short" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
+          pct={pctOf(probs.short ?? probs.sell)}
+        />
+        <BarRow
+          label="open"
+          labelColor="var(--ink)"
+          active={decision?.intent === "open"}
+          value={probs.open ?? 0}
+          fill={decision?.intent === "open" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
+          pct={pctOf(probs.open)}
+        />
+        <BarRow
+          label="close"
+          labelColor="var(--ink)"
+          active={decision?.intent === "close"}
+          value={probs.close ?? 0}
+          fill={decision?.intent === "close" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
+          pct={pctOf(probs.close)}
         />
       </section>
     </div>
@@ -128,5 +144,5 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
 
 function standingCopy(meta?: Meta | null): string {
   const pair = meta?.pair ?? meta?.market ?? "BTC-USD";
-  return `> post a bid or an ask on Hyperliquid ${pair}. every tick. no abstaining.`;
+  return `> Jev picks long or short, open or close, and leverage. we post that quote on Hyperliquid ${pair} every tick.`;
 }

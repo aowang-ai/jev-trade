@@ -14,6 +14,22 @@ const MIN_RANGE_PCT = 0.002;
 const TAG_W = 58;
 const LINE_POINTS = 720;
 const MIN_SPAN_MS = 8_000;
+const MARK_SIZE = 4;
+const MARK_LIFT = 6;
+
+const SCALES = [
+  { id: "15m", label: "15m", ms: 15 * 60 * 1000 },
+  { id: "1H", label: "1H", ms: 60 * 60 * 1000 },
+  { id: "4H", label: "4H", ms: 4 * 60 * 60 * 1000 },
+  { id: "12H", label: "12H", ms: 12 * 60 * 60 * 1000 },
+  { id: "1D", label: "1D", ms: 24 * 60 * 60 * 1000 },
+  { id: "3D", label: "3D", ms: 3 * 24 * 60 * 60 * 1000 },
+  { id: "7D", label: "7D", ms: 7 * 24 * 60 * 60 * 1000 },
+] as const;
+
+type ScaleId = (typeof SCALES)[number]["id"] | "ALL";
+const DEFAULT_SCALE: ScaleId = "4H";
+type ScaleState = ScaleId | null;
 
 type View = { start: number; end: number; follow: boolean };
 
@@ -108,11 +124,24 @@ function clampWindow(start: number, end: number, first: number, last: number): {
   return { start: s, end: e, follow: e >= last - 1 };
 }
 
-function markPath(x: number, y: number, side: "buy" | "sell"): string {
-  const s = 5.5;
+function markPath(x: number, y: number, side: "buy" | "sell", s = MARK_SIZE): string {
   return side === "buy"
-    ? `M${x} ${y - s} L${x - s} ${y + s * 0.7} L${x + s} ${y + s * 0.7} Z`
-    : `M${x} ${y + s} L${x - s} ${y - s * 0.7} L${x + s} ${y - s * 0.7} Z`;
+    ? `M${x} ${y - s} L${x - s} ${y + s * 0.72} L${x + s} ${y + s * 0.72} Z`
+    : `M${x} ${y + s} L${x - s} ${y - s * 0.72} L${x + s} ${y - s * 0.72} Z`;
+}
+
+function nearestFill(pts: PricePoint[], ts: number, maxDt: number): PricePoint | null {
+  let best: PricePoint | null = null;
+  let bestDt = maxDt;
+  for (const p of pts) {
+    if (!p.fill) continue;
+    const dt = Math.abs(p.ts - ts);
+    if (dt < bestDt) {
+      bestDt = dt;
+      best = p;
+    }
+  }
+  return best;
 }
 
 function xFromEvent(ev: { clientX: number }, el: HTMLElement, plotW: number): number {
@@ -135,6 +164,7 @@ export default function FlowChart({
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<number | null>(null);
   const [view, setView] = useState<View | null>(null);
+  const [scale, setScale] = useState<ScaleState>(DEFAULT_SCALE);
   const [dragging, setDragging] = useState(false);
   const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const dragRef = useRef<{ x: number; start: number; end: number } | null>(null);
@@ -188,7 +218,12 @@ export default function FlowChart({
 
   const resolved = useMemo(() => {
     if (!bounds) return null;
-    if (!view) return { start: bounds.first, end: bounds.last, follow: true };
+    const scaleMs = scale ? SCALES.find((s) => s.id === scale)?.ms : undefined;
+    if (scaleMs) {
+      const end = bounds.last;
+      return { start: Math.max(bounds.first, end - scaleMs), end, follow: true };
+    }
+    if (scale === "ALL" || !view) return { start: bounds.first, end: bounds.last, follow: true };
     if (view.follow) {
       const span = Math.max(MIN_SPAN_MS, view.end - view.start);
       const end = bounds.last;
@@ -196,7 +231,7 @@ export default function FlowChart({
       return { start, end, follow: true };
     }
     return clampWindow(view.start, view.end, bounds.first, bounds.last);
-  }, [view, bounds]);
+  }, [view, bounds, scale]);
 
   const seriesRef = useRef(series);
   const resolvedRef = useRef(resolved);
@@ -210,9 +245,11 @@ export default function FlowChart({
     if (!b) return;
     const next = clampWindow(start, end, b.first, b.last);
     if (next.end - next.start >= (b.last - b.first) * 0.995) {
+      setScale("ALL");
       setView(null);
       return;
     }
+    setScale(null);
     setView(next);
   };
   const applyRef = useRef(applyWindow);
@@ -317,7 +354,8 @@ export default function FlowChart({
     const fx = (ts: number) => (flat ? PAD_LEFT + plotW : PAD_LEFT + ((ts - t0) / span) * plotW);
     const fy = (p: number) => PAD_TOP + (1 - (p - lo) / range) * plotH;
 
-    const drawn = lttb(vis, LINE_POINTS);
+    const lineSrc = vis.filter((p) => !p.fill);
+    const drawn = lttb(lineSrc.length ? lineSrc : vis, LINE_POINTS);
     const pts = drawn.map((p) => [fx(p.ts), fy(p.mid)] as const);
     const line = smoothPath(pts);
     const base = h - PAD_BOTTOM;
@@ -325,16 +363,37 @@ export default function FlowChart({
       ? `${line} L${pts[pts.length - 1]![0].toFixed(1)} ${base} L${pts[0]![0].toFixed(1)} ${base} Z`
       : "";
 
-    const marks = vis
-      .filter((p) => p.fill && p.ts >= t0 && p.ts <= t1)
-      .map((p) => ({
-        key: `${p.ts}-${p.fill!.side}-${p.fill!.price}`,
-        x: fx(p.ts),
-        y: fy(p.fill!.price),
-        side: p.fill!.side,
-        d: markPath(fx(p.ts), fy(p.fill!.price), p.fill!.side),
-        fill: p.fill!.side === "buy" ? "var(--buy)" : "var(--sell)",
-      }));
+    const seen = new Set<string>();
+    const marks: {
+      key: string;
+      x: number;
+      y: number;
+      side: "buy" | "sell";
+      d: string;
+      fill: string;
+      kind: "fill" | "quote";
+    }[] = [];
+    const addMark = (ts: number, mid: number, side: "buy" | "sell", kind: "fill" | "quote", extra = "") => {
+      const key = `${kind}-${ts}-${side}-${extra}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const x = fx(ts);
+      const yLine = fy(mid);
+      const lift = kind === "fill" ? MARK_LIFT : 4;
+      const y = side === "buy" ? yLine + lift : yLine - lift;
+      marks.push({
+        key,
+        x,
+        y,
+        side,
+        d: markPath(x, y, side, kind === "fill" ? MARK_SIZE : 3),
+        fill: side === "buy" ? "var(--buy)" : "var(--sell)",
+        kind,
+      });
+    };
+    for (const p of vis) {
+      if (p.fill && p.ts >= t0 && p.ts <= t1) addMark(p.ts, p.fill.price, p.fill.side, "fill", String(p.fill.price));
+    }
 
     const ticks = [0.25, 0.5, 0.75].map((f) => ({
       y: PAD_TOP + plotH * f,
@@ -368,15 +427,16 @@ export default function FlowChart({
       endX,
       lastVisible,
     };
-  }, [series, resolved, w, h]);
+  }, [series, resolved, w, h, events]);
 
   const hv = useMemo(() => {
     if (!model || hover === null || dragging) return null;
-    const p = nearest(series, hover);
+    const snap = nearestFill(series, hover, Math.max(8_000, model.span * 0.02));
+    const p = snap ?? nearest(series, hover);
     if (!p) return null;
     const x = model.fx(p.ts);
     if (x < PAD_LEFT - 8 || x > PAD_LEFT + model.plotW + 8) return null;
-    const y = model.fy(p.mid);
+    const y = p.fill ? (p.fill.side === "buy" ? model.fy(p.mid) + MARK_LIFT : model.fy(p.mid) - MARK_LIFT) : model.fy(p.mid);
     const flip = x > w - 180;
     const ty = Math.min(Math.max(y - 88, PAD_TOP - 40), model.base - 78);
     const coin = meta?.coin ?? "BTC";
@@ -401,17 +461,33 @@ export default function FlowChart({
   const d = shown?.decision ?? null;
   const late = d?.late === true;
   const act = late ? "late" : (d?.action ?? "hold");
-  const word =
-    act === "buy" ? "Buying" : act === "sell" ? "Selling" : act === "late" ? "Missed the tick" : "Holding";
-  const wordColor =
-    act === "buy"
-      ? "var(--buy-ink)"
-      : act === "sell"
-        ? "var(--sell-ink)"
-        : act === "late"
-          ? "var(--late-ink)"
-          : "var(--ink)";
-  const conf = d ? Math.max(d.probabilities.buy, d.probabilities.sell, d.probabilities.hold) : 0;
+  const word = late
+    ? "Missed the tick"
+    : d?.intent && d.bias
+      ? `${d.intent === "open" ? "Opening" : "Closing"} ${d.bias}${d.leverage != null ? ` ${d.leverage}x` : ""}`
+      : act === "buy"
+        ? "Buying"
+        : act === "sell"
+          ? "Selling"
+          : "Holding";
+  const wordColor = late
+    ? "var(--late-ink)"
+    : (d?.bias ?? act) === "short" || act === "sell"
+      ? "var(--sell-ink)"
+      : act === "buy" || d?.bias === "long"
+        ? "var(--buy-ink)"
+        : "var(--ink)";
+  const conf = d
+    ? Math.max(
+        d.probabilities.long ?? 0,
+        d.probabilities.short ?? 0,
+        d.probabilities.open ?? 0,
+        d.probabilities.close ?? 0,
+        d.probabilities.buy,
+        d.probabilities.sell,
+        d.probabilities.hold,
+      )
+    : 0;
   const pos = shown?.position;
   const stance = fmtPosition(pos, meta?.coin ?? "BTC");
   const posPnl = pos?.unrealizedUsd ?? 0;
@@ -420,7 +496,7 @@ export default function FlowChart({
   const spanLabel = resolved
     ? `${fmtAxisTime(resolved.start, resolved.end - resolved.start)} to ${fmtAxisTime(resolved.end, resolved.end - resolved.start)}`
     : "all time";
-  const allTime = view === null;
+  const allTime = scale === "ALL" || (scale == null && view == null);
 
   return (
     <div className={styles.wrap}>
@@ -429,8 +505,8 @@ export default function FlowChart({
         className={`${styles.panel} ${dragging ? styles.dragging : ""}`}
         role="application"
         tabIndex={0}
-        aria-label="Price chart. Scroll to zoom. Drag to move. Double click for all time."
-        title="Scroll to zoom. Drag to move. Double click for all time."
+        aria-label="Price chart. Scroll to zoom. Drag to move. Use the time scale buttons."
+        title="Scroll to zoom. Drag to move. Use the time scale buttons."
         data-range={resolved ? `${Math.round(resolved.start)}:${Math.round(resolved.end)}` : ""}
         onWheel={(ev) => {
           zoomAt(ev.clientX, Math.exp(ev.deltaY * 0.0018));
@@ -452,6 +528,7 @@ export default function FlowChart({
             panBy(0.2);
           } else if (ev.key === "0" || ev.key === "Escape") {
             ev.preventDefault();
+            setScale("ALL");
             setView(null);
           }
         }}
@@ -493,6 +570,7 @@ export default function FlowChart({
         }}
         onDoubleClick={(ev) => {
           if ((ev.target as HTMLElement).closest("button")) return;
+          setScale("ALL");
           setView(null);
         }}
         onTouchStart={(ev) => {
@@ -539,7 +617,12 @@ export default function FlowChart({
                 <path d={model.area} fill={`url(#g${gid})`} />
                 <path className={styles.line} d={model.line} />
                 {model.marks.map((m) => (
-                  <path key={m.key} className={styles.mark} d={m.d} fill={m.fill} />
+                  <path
+                    key={m.key}
+                    className={m.kind === "quote" ? styles.markQuote : styles.mark}
+                    d={m.d}
+                    fill={m.fill}
+                  />
                 ))}
               </g>
 
@@ -613,7 +696,37 @@ export default function FlowChart({
               </div>
             </div>
 
+            <div className={styles.legend} aria-hidden="true">
+              <span className={styles.legBuy}>buy fill</span>
+              <span className={styles.legSell}>sell fill</span>
+            </div>
+
             <div className={styles.tools}>
+              {SCALES.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`${styles.tool} ${scale === s.id ? styles.toolOn : ""}`}
+                  aria-pressed={scale === s.id}
+                  onClick={() => {
+                    setScale(s.id);
+                    setView(null);
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`${styles.tool} ${allTime ? styles.toolOn : ""}`}
+                aria-pressed={allTime}
+                onClick={() => {
+                  setScale("ALL");
+                  setView(null);
+                }}
+              >
+                ALL
+              </button>
               <button
                 type="button"
                 className={styles.tool}
@@ -640,11 +753,6 @@ export default function FlowChart({
               >
                 -
               </button>
-              {!allTime ? (
-                <button type="button" className={styles.tool} onClick={() => setView(null)}>
-                  all time
-                </button>
-              ) : null}
             </div>
           </>
         )}
