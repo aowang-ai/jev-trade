@@ -6,7 +6,7 @@ import Feed from "@/components/Feed/Feed";
 import FlowChart from "@/components/FlowChart/FlowChart";
 import Header from "@/components/Header/Header";
 import SleeveStrip from "@/components/SleeveStrip/SleeveStrip";
-import StatsRow from "@/components/StatsRow/StatsRow";
+import { lastMeaningfulCall } from "@/lib/format";
 import { useFeed } from "@/lib/useFeed";
 import type { BlockEvent, Meta, SleeveFeed } from "@/lib/types";
 import styles from "./page.module.css";
@@ -46,20 +46,48 @@ export default function Page() {
     return out;
   }, [coins, feed.byCoin]);
 
+  const lastCallByCoin = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const c of coins) {
+      const s = feed.byCoin[c];
+      out[c] = lastMeaningfulCall(s?.events ?? [], s?.latest ?? null);
+    }
+    return out;
+  }, [coins, feed.byCoin]);
+
+  const portfolioPnl = useMemo(() => {
+    let sum = 0;
+    let any = false;
+    for (const c of coins) {
+      const pnl = feed.byCoin[c]?.latest?.totals?.pnlUsd;
+      if (typeof pnl === "number" && Number.isFinite(pnl)) {
+        sum += pnl;
+        any = true;
+      }
+    }
+    return any ? sum : null;
+  }, [coins, feed.byCoin]);
+
   return (
-    <div className="card">
-      <Header meta={meta} latest={sleeve.latest} connection={feed.connection} />
+    <div className="shell">
+      <Header connection={feed.connection} portfolioPnl={portfolioPnl} />
       <SleeveStrip
         sleeves={feed.meta?.sleeves ?? []}
         latestByCoin={latestByCoin}
+        lastCallByCoin={lastCallByCoin}
         selected={coin}
         onSelect={setPicked}
       />
-      <StatsRow latest={sleeve.latest} avgLatencyMs={sleeve.avgLatencyMs} meta={meta} />
       <div className={styles.main}>
         <div className={styles.left}>
           <div className={styles.chartWrap}>
-            <FlowChart tape={sleeve.tape ?? []} events={sleeve.events} latest={sleeve.latest} meta={meta} />
+            <FlowChart
+              key={coin}
+              tape={sleeve.tape ?? []}
+              events={sleeve.events}
+              latest={sleeve.latest}
+              meta={meta}
+            />
           </div>
         </div>
         <div className={styles.right}>

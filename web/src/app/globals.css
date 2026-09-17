@@ -1,58 +1,51 @@
-/* ---- Jev Trader design tokens (5e "Eleven", warm-neutral light system) ---- */
 :root {
-  /* surfaces */
-  --bg: #FFFFFF;
-  --panel: #F5F4F1;
-  --border: #ECECEA;
-  --border-2: #E5E4DF;
-  --track: #F1F0EC;
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f8f9fa;
+  --border: #000000;
+  --border-2: #000000;
+  --track: #e8e8e8;
 
-  /* ink */
-  --ink: #0A0A0A;
-  --ink-2: #3C3C38;
-  --muted: #77776F;
-  --muted-2: #98968E;
-  --link-muted: #5A5A56;
+  --ink: #000000;
+  --ink-2: #333333;
+  --muted: #666666;
+  --muted-2: #666666;
+  --link-muted: #333333;
 
-  /* sides */
-  --buy: #0FA968;
-  --buy-ink: #0B7A48;
-  --buy-bar: #34C382;
-  --buy-bar-dim: #D9EEE3;
-  --sell: #E4573D;
-  --sell-ink: #C2402F;
-  --sell-bar: #F07860;
-  --sell-bar-dim: #F9DED6;
+  --buy: #00aa00;
+  --buy-ink: #00aa00;
+  --buy-bar: #00aa00;
+  --buy-bar-dim: #c8e6c8;
+  --sell: #cc0000;
+  --sell-ink: #cc0000;
+  --sell-bar: #cc0000;
+  --sell-bar-dim: #f0c8c8;
 
-  /* block cells + horizon bars */
-  --late: #C98A1B;
-  --late-ink: #A16207;
-  --late-cell: #F2C063;
-  --hold-cell: #E3E1DA;
-  --up-bar: #8FCDAB;
-  --down-bar: #EBAB9E;
-  --link: #7B6ED9;
+  --late: #b8860b;
+  --late-ink: #b8860b;
+  --late-cell: #fff4d6;
+  --hold-cell: #f1f3f4;
+  --up-bar: #00aa00;
+  --down-bar: #cc0000;
+  --link: #0000aa;
 
-  /* chrome */
-  --badge-jev-bg: #EBE7FC;
-  --badge-jev-fg: #4C3EBB;
-  --badge-standin-bg: #FBEED3;
-  --badge-standin-fg: #8A5B0E;
-  --live-dot: #4ADE80;
-  --pnl-pos: #0E9F5D;
-  --pnl-neg: #DE3B32;
+  --badge-jev-bg: #000000;
+  --badge-jev-fg: #ffffff;
+  --badge-standin-bg: #000000;
+  --badge-standin-fg: #ffffff;
+  --live-dot: #00aa00;
+  --pnl-pos: #00aa00;
+  --pnl-neg: #cc0000;
+  --grid: #e5e5e5;
 
-  /* fonts (set by next/font in layout.tsx) */
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-plex), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: var(--font-plex), "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* page */
-  --page-bg: #F0EEE9;
-  --card-radius: 18px;
-  --card-max: 1400px;
+  --page-bg: #ffffff;
+  --card-radius: 0;
+  --card-max: none;
 }
 
-/* ---- base reset ---- */
 *,
 *::before,
 *::after {
@@ -72,9 +65,10 @@ html {
 body {
   background: var(--page-bg);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.4;
+  letter-spacing: -0.02em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -110,37 +104,26 @@ svg {
   max-width: 100%;
 }
 
-/* ---- the card: the design's 1400px white slab, centered on the warm page ----
-   Desktop (>= 900px): the card is exactly the viewport minus its 16px margins
-   and is a flex column, so header + stats take their natural height and the
-   main row absorbs the rest. Nothing can overflow -> no page scrollbar.
-   Below 900px the card is auto-height and the page scrolls normally. */
-.card {
+.shell {
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--card-radius);
-  /* 16px side gutters at every width, centered, never wider than 1400px */
-  max-width: min(var(--card-max), calc(100% - 32px));
-  margin: 16px auto;
+  max-width: var(--card-max);
+  margin: 0 auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* breathing room under the main row (there is no footer any more) */
-  padding-bottom: 16px;
+  min-height: 100vh;
 }
 
 @media (min-width: 900px) {
-  /* the card already fills the viewport; never let the document scroll */
   body {
     overflow: hidden;
   }
 
-  .card {
-    /* 16px margin top + 16px bottom; border-box keeps the 1px borders inside */
-    height: calc(100vh - 32px);
+  .shell {
+    height: 100vh;
+    min-height: 0;
   }
 }
-
 
 @media (prefers-reduced-motion: reduce) {
   *,

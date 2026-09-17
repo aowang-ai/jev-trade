@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BlockEvent, Meta, PricePoint } from "@/lib/types";
-import { fmtAxisTime, fmtClock, fmtCoin, fmtConf, fmtPosition, fmtPrice, fmtSigned, fmtSignedUsd } from "@/lib/format";
+import { fmtAxisTime, fmtCall, fmtClock, fmtCoin, fmtPrice } from "@/lib/format";
 import { smoothPath } from "./smooth";
 import styles from "./FlowChart.module.css";
 
-const PAD_TOP = 84;
+const PAD_TOP = 68;
 const PAD_BOTTOM = 36;
 const PAD_LEFT = 16;
 const PAD_RIGHT = 78;
@@ -460,42 +460,14 @@ export default function FlowChart({
   const shown = latest ?? events[events.length - 1] ?? null;
   const d = shown?.decision ?? null;
   const late = d?.late === true;
-  const act = late ? "late" : (d?.action ?? "hold");
-  const word = late
-    ? "Missed the tick"
-    : d?.intent && d.bias
-      ? `${d.intent === "open" ? "Opening" : "Closing"} ${d.bias}${d.leverage != null ? ` ${d.leverage}x` : ""}`
-      : act === "buy"
-        ? "Buying"
-        : act === "sell"
-          ? "Selling"
-          : "Holding";
+  const word = late ? "LATE" : fmtCall(d) || "HOLD";
   const wordColor = late
     ? "var(--late-ink)"
-    : (d?.bias ?? act) === "short" || act === "sell"
+    : (d?.bias ?? d?.action) === "short" || d?.action === "sell"
       ? "var(--sell-ink)"
-      : act === "buy" || d?.bias === "long"
+      : d?.action === "buy" || d?.bias === "long"
         ? "var(--buy-ink)"
         : "var(--ink)";
-  const conf = d
-    ? Math.max(
-        d.probabilities.long ?? 0,
-        d.probabilities.short ?? 0,
-        d.probabilities.open ?? 0,
-        d.probabilities.close ?? 0,
-        d.probabilities.buy,
-        d.probabilities.sell,
-        d.probabilities.hold,
-      )
-    : 0;
-  const pos = shown?.position;
-  const stance = fmtPosition(pos, meta?.coin ?? "BTC");
-  const posPnl = pos?.unrealizedUsd ?? 0;
-  const pnlUsd = shown?.totals?.pnlUsd ?? 0;
-  const pnlPct = shown?.totals?.pnlPct ?? 0;
-  const spanLabel = resolved
-    ? `${fmtAxisTime(resolved.start, resolved.end - resolved.start)} to ${fmtAxisTime(resolved.end, resolved.end - resolved.start)}`
-    : "all time";
   const allTime = scale === "ALL" || (scale == null && view == null);
 
   return (
@@ -601,8 +573,8 @@ export default function FlowChart({
             <svg className={styles.svg} viewBox={`0 0 ${w} ${h}`} width={w} height={h} role="img" aria-label="Chart surface">
               <defs>
                 <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(10,10,10,0.07)" />
-                  <stop offset="100%" stopColor="rgba(10,10,10,0)" />
+                  <stop offset="0%" stopColor="rgba(0,0,0,0.08)" />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0)" />
                 </linearGradient>
                 <clipPath id={`c${gid}`}>
                   <rect x={PAD_LEFT} y={PAD_TOP - 4} width={model.plotW} height={model.plotH + 8} />
@@ -660,7 +632,7 @@ export default function FlowChart({
               {model.lastVisible ? (
                 <g className={styles.tag} style={{ transform: `translate(${model.endX.toFixed(1)}px, ${model.endY.toFixed(1)}px)` }}>
                   <circle cx="0" cy="0" r="4" fill="var(--ink)" />
-                  <rect x="10" y="-10" width={TAG_W} height="20" rx="999" fill="var(--ink)" />
+                  <rect x="10" y="-10" width={TAG_W} height="20" rx="0" fill="var(--ink)" />
                   <text className={styles.tagText} x={10 + TAG_W / 2} y="4" textAnchor="middle">
                     {fmtPrice(model.last.mid)}
                   </text>
@@ -672,27 +644,12 @@ export default function FlowChart({
               <div className={styles.price}>{fmtPrice(shown?.mid ?? model.last.mid)}</div>
               <div className={styles.sub}>
                 <span>{meta?.pair ?? "BTC-USD"}</span>
-                <span>Hyperliquid</span>
-                <span>{spanLabel}</span>
-                <span>{stance}</span>
-                {pos && pos.side !== "flat" ? (
-                  <span style={{ color: posPnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)" }}>
-                    pos {fmtSignedUsd(posPnl)}
-                  </span>
-                ) : null}
-                <span style={{ color: pnlUsd >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)" }}>
-                  p&amp;l {fmtSignedUsd(pnlUsd)} ({fmtSigned(pnlPct, 2)}%)
-                </span>
               </div>
             </div>
 
             <div className={styles.tr}>
               <div className={styles.word} style={{ color: wordColor }}>
                 {word}
-              </div>
-              <div className={styles.sub}>
-                <span>{!d || late ? "late" : `${Math.round(d.latencyMs)} ms`}</span>
-                <span>conf {fmtConf(conf)}</span>
               </div>
             </div>
 

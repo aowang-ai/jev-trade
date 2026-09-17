@@ -1,25 +1,53 @@
-/* The feed is the flexible child of the right column: it takes whatever the
-   decision panel leaves and clips. Rows are a fixed 26px so the number that
-   fits is exactly floor(listHeight / 26) (see ROW_H in Feed.tsx). */
-
 .feed {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-top: 14px;
 }
 
-.label {
+.railHead {
   flex: none;
-  font-family: var(--font-sans), Inter, sans-serif;
-  font-weight: 500;
-  font-size: 11px;
-  line-height: 1.2;
-  letter-spacing: 0.1em;
-  color: var(--muted-2);
-  padding: 0 18px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  padding: 8px 12px;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.08em;
+}
+
+.tab,
+.tabOn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.tab {
+  opacity: 0.45;
+}
+
+.tabOn {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .list {
@@ -29,9 +57,6 @@
   overflow: hidden;
 }
 
-/* Safety net: if the measured row count is ever off (no ResizeObserver, a
-   mid-resize frame), the bottom of the clipped row fades out instead of
-   being sliced in half. */
 .list::after {
   content: "";
   position: absolute;
@@ -39,39 +64,24 @@
   right: 0;
   bottom: 0;
   height: 14px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--bg));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--panel));
   pointer-events: none;
 }
 
-/* one line, fixed height, never wraps, never overflows */
 .row {
   flex: none;
   height: 26px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 18px;
+  padding: 0 12px;
   white-space: nowrap;
   overflow: hidden;
-  font-family: var(--font-mono), "Geist Mono", monospace;
   font-weight: 400;
   font-size: 11.5px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   background: transparent;
-  transition: background 0.5s;
-  animation: feedRowIn 0.25s ease-out both;
-}
-
-@keyframes feedRowIn {
-  from {
-    transform: translateY(-6px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 
 .cell {
@@ -83,22 +93,17 @@
 
 .time {
   width: 72px;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
 .word {
-  width: 48px;
-  font-weight: 700;
-}
-
-.conf {
   width: 72px;
-  color: var(--muted-2);
+  font-weight: 700;
 }
 
 .lat {
   width: 42px;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
 .detail {
@@ -117,20 +122,18 @@
 }
 
 .muted {
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
 .empty {
   height: 26px;
   display: flex;
   align-items: center;
-  padding: 0 18px;
-  font-family: var(--font-mono), "Geist Mono", monospace;
+  padding: 0 12px;
   font-size: 11.5px;
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
-/* word + detail take the row's colour */
 .kindBuy .word,
 .kindBuy .detail {
   color: var(--buy);
@@ -149,16 +152,15 @@
 .kindBuy .detail.muted,
 .kindSell .detail.muted,
 .kindLate .detail.muted {
-  color: var(--muted-2);
+  color: var(--muted);
 }
 
-/* trade rows get a faint tint; the newest row a stronger one */
 .kindBuy {
-  background: rgba(15, 169, 104, 0.07);
+  background: rgba(0, 170, 0, 0.06);
 }
 
 .kindSell {
-  background: rgba(228, 87, 61, 0.07);
+  background: rgba(204, 0, 0, 0.06);
 }
 
 .kindLate {
@@ -166,19 +168,17 @@
 }
 
 .newest.kindBuy {
-  background: rgba(15, 169, 104, 0.16);
+  background: rgba(0, 170, 0, 0.12);
 }
 
 .newest.kindSell {
-  background: rgba(228, 87, 61, 0.16);
+  background: rgba(204, 0, 0, 0.12);
 }
 
 .newest.kindLate {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--panel-2);
 }
 
-/* Below 900px nothing constrains the column's height, so give the list a
-   definite one (15 rows) instead of letting it size to its own content. */
 @media (max-width: 899.98px) {
   .list {
     flex: none;
@@ -186,21 +186,15 @@
   }
 }
 
-/* narrow screens: drop conf so the row still fits on one line */
 @media (max-width: 390px) {
-  .conf {
+  .lat {
     display: none;
   }
 
   .row {
     gap: 8px;
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .label {
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   .time {
@@ -208,14 +202,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .row {
-    animation: none;
-    transition: none;
-  }
-}
-
-/* A block where a taker hit one of our resting orders: the detail is the fill, in full weight. */
 .filled .detail {
-  font-weight: 600;
+  font-weight: 700;
 }

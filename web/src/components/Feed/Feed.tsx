@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BlockEvent, Meta } from "@/lib/types";
 import { fmtClock, fmtPrice, shortTx, txUrl } from "@/lib/format";
 import styles from "./Feed.module.css";
 
-/** Must match `.row { height }` in Feed.module.css. */
 const ROW_H = 26;
-/** Hard ceiling, so a very tall viewport does not render an absurd list. */
 const MAX_ROWS = 40;
 
 type Kind = "buy" | "sell" | "late";
+type Filter = "live" | "fills";
 
 function kindOf(event: BlockEvent): Kind {
   const d = event.decision;
@@ -35,6 +34,7 @@ const KIND_CLASS: Record<Kind, string> = {
 
 function wordOf(event: BlockEvent, kind: Kind): string {
   const d = event.decision;
+  if (event.fill && event.fill.size > 0) return "FILL";
   if (kind === "late") return "LATE";
   if (d?.intent === "close") return "CLOSE";
   if (d?.intent === "open") return "OPEN";
@@ -43,15 +43,18 @@ function wordOf(event: BlockEvent, kind: Kind): string {
   return "LATE";
 }
 
-/**
- * One row per tick, newest first. Clock is the tick time to the second. The word is the side
- * the model picked. Detail is the quote, or the fill when a taker hit us.
- */
+function isFill(event: BlockEvent): boolean {
+  return Boolean(event.fill && event.fill.size > 0);
+}
+
+function isLiveRow(event: BlockEvent): boolean {
+  return isFill(event) || Boolean(event.decision && !event.decision.late);
+}
+
 export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Meta | null }) {
   const listRef = useRef<HTMLDivElement | null>(null);
-  // How many whole 26px rows fit in the box the layout gives us. The list
-  // itself clips, so a wrong guess is never a half-drawn row, only a hidden one.
   const [capacity, setCapacity] = useState(MAX_ROWS);
+  const [filter, setFilter] = useState<Filter>("live");
 
   useEffect(() => {
     const el = listRef.current;
@@ -69,14 +72,40 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
     return () => ro.disconnect();
   }, []);
 
-  const rows = events.slice(-capacity).reverse();
+  const filtered = useMemo(() => {
+    if (filter === "fills") return events.filter(isFill);
+    return events.filter(isLiveRow);
+  }, [events, filter]);
+
+  const rows = filtered.slice(-capacity).reverse();
 
   return (
     <section className={styles.feed}>
-      <div className={styles.label}>FEED</div>
+      <div className={styles.railHead}>
+        <span>TAPE</span>
+        <span className={styles.tabs}>
+          <button
+            type="button"
+            className={filter === "live" ? styles.tabOn : styles.tab}
+            onClick={() => setFilter("live")}
+            aria-pressed={filter === "live"}
+          >
+            CALLS
+          </button>
+          <span aria-hidden="true">|</span>
+          <button
+            type="button"
+            className={filter === "fills" ? styles.tabOn : styles.tab}
+            onClick={() => setFilter("fills")}
+            aria-pressed={filter === "fills"}
+          >
+            FILLS
+          </button>
+        </span>
+      </div>
       <div className={styles.list} ref={listRef}>
         {rows.length === 0 ? (
-          <div className={styles.empty}>no ticks yet</div>
+          <div className={styles.empty}>{filter === "fills" ? "no fills yet" : "no calls yet"}</div>
         ) : (
           rows.map((event, i) => {
             const kind = kindOf(event);
@@ -86,26 +115,12 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
             const decided = kind !== "late";
             const kindClass = KIND_CLASS[kind];
 
-            const conf =
-              !decided || !decision
-                ? ""
-                : "conf " +
-                  Math.max(
-                    decision.probabilities.long ?? 0,
-                    decision.probabilities.short ?? 0,
-                    decision.probabilities.open ?? 0,
-                    decision.probabilities.close ?? 0,
-                    decision.probabilities.buy,
-                    decision.probabilities.sell,
-                    decision.probabilities.hold,
-                  ).toFixed(2);
-
             const lat = !decided || !decision ? "" : `${decision.latencyMs}ms`;
 
             let detail = "";
             let detailMuted = false;
             if (fill && fill.size > 0) {
-              detail = `FILL ${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
+              detail = `${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
             } else if (decided && quote) {
               const word = quote.side === "buy" ? "bid" : "ask";
               const lev = decision?.leverage != null ? ` ${decision.leverage}x` : "";
@@ -115,8 +130,6 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
             } else if (decided && decision?.intent === "close" && event.position.side === "flat") {
               detail = "already flat";
               detailMuted = true;
-            } else if (decided) {
-              detail = "";
             }
 
             const rowClass = [styles.row, kindClass, i === 0 ? styles.newest : "", fill ? styles.filled : ""]
@@ -127,7 +140,6 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
               <div key={event.block} className={rowClass}>
                 <span className={`${styles.cell} ${styles.time}`}>{fmtClock(event.ts, true)}</span>
                 <span className={`${styles.cell} ${styles.word}`}>{wordOf(event, kind)}</span>
-                <span className={`${styles.cell} ${styles.conf}`}>{conf}</span>
                 <span className={`${styles.cell} ${styles.lat}`}>{lat}</span>
                 <span
                   className={`${styles.cell} ${styles.detail}${detailMuted ? ` ${styles.muted}` : ""}`}

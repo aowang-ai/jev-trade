@@ -62,10 +62,28 @@ export function fmtCall(d: {
   action?: string;
   intent?: string;
   bias?: string;
+  leverage?: number | null;
 } | null | undefined): string {
   if (!d) return "";
-  if (d.intent && d.bias) return `${d.intent} ${d.bias}`.toUpperCase();
-  if (d.action && d.action !== "hold") return d.action.toUpperCase();
+  let word = "";
+  if (d.intent && d.bias) word = `${d.intent} ${d.bias}`.toUpperCase();
+  else if (d.action && d.action !== "hold") word = d.action.toUpperCase();
+  if (!word) return "";
+  return d.leverage != null ? `${word} ${d.leverage}x` : word;
+}
+
+/** Newest non-late call, so a LATE tick does not wipe the last real pick. */
+export function lastMeaningfulCall(
+  events: { decision: { late: boolean; action?: string; intent?: string; bias?: string; leverage?: number | null } | null }[],
+  latest?: { decision: { late: boolean; action?: string; intent?: string; bias?: string; leverage?: number | null } | null } | null,
+): string {
+  const tail = latest ? [...events, latest] : events;
+  for (let i = tail.length - 1; i >= 0; i--) {
+    const d = tail[i]?.decision;
+    if (!d || d.late) continue;
+    const call = fmtCall(d);
+    if (call) return call;
+  }
   return "";
 }
 

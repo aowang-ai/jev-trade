@@ -5,108 +5,111 @@
 }
 
 .section {
-  padding: 18px;
   border-bottom: 1px solid var(--border);
 }
 
-.sectionLabel {
-  font-family: var(--font-sans), Inter, system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 11px;
-  line-height: 1.2;
-  letter-spacing: 0.1em;
-  color: var(--muted-2);
+.railHead {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  padding: 8px 12px;
 }
 
-.sectionLabelGap {
-  margin-bottom: 10px;
+.body {
+  padding: 12px 14px 14px;
 }
-
-/* ---- (1) standing order ---- */
-
-.order {
-  margin-top: 6px;
-  font-family: var(--font-mono), "Geist Mono", ui-monospace, monospace;
-  font-weight: 400;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ink-2);
-}
-
-/* ---- (2) the decision: headline + bars ---- */
 
 .headline {
   display: flex;
   align-items: baseline;
-  gap: 14px;
-  margin-bottom: 14px;
-  transition: color 0.3s;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
 .headlineWord {
-  font-family: var(--font-sans), Inter, system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 28px;
+  font-weight: 700;
+  font-size: 22px;
   line-height: 1.1;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
 }
 
-.headlinePct {
-  font-family: var(--font-mono), "Geist Mono", ui-monospace, monospace;
-  font-weight: 500;
-  font-size: 20px;
-  line-height: 1.1;
+.metaLine {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bookLine {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.bookSub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 0;
+  gap: 10px;
+  padding: 3px 0;
 }
 
 .label {
-  width: 52px;
+  width: 48px;
   flex: none;
-  display: inline-block;
-  font-family: var(--font-sans), Inter, system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 12px;
   line-height: 1.2;
-  transition: opacity 0.3s;
 }
 
 .track {
   flex: 1;
   min-width: 0;
-  height: 16px;
-  border-radius: 99px;
+  height: 10px;
+  border-radius: 0;
   background: var(--track);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  border-radius: 99px;
+  border-radius: 0;
   transition: width 0.25s linear, background 0.25s;
 }
 
 .pct {
-  width: 46px;
+  width: 40px;
   flex: none;
   text-align: right;
-  font-family: var(--font-mono), "Geist Mono", ui-monospace, monospace;
   font-weight: 500;
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.2;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .headline,
-  .label,
   .fill {
     transition: none;
   }
