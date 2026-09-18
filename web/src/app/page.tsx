@@ -86,12 +86,13 @@ export default function Page() {
               events={sleeve.events}
               latest={sleeve.latest}
               meta={meta}
+              onNeedMoreTape={feed.loadTape}
             />
           </div>
         </div>
         <div className={styles.right}>
           <DecisionPanel latest={sleeve.latest} meta={meta} />
-          <Feed events={sleeve.events} tape={sleeve.tape ?? []} meta={meta} />
+          <Feed events={sleeve.events} tape={sleeve.tape ?? []} meta={meta} onNeedMoreTape={feed.loadTape} />
         </div>
       </div>
     </div>

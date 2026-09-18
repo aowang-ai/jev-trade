@@ -51,7 +51,17 @@ function isLiveRow(event: BlockEvent): boolean {
   return Boolean(event.fill && event.fill.size > 0) || Boolean(event.decision && !event.decision.late);
 }
 
-export default function Feed({ events, tape = [], meta }: { events: BlockEvent[]; tape?: PricePoint[]; meta?: Meta | null }) {
+export default function Feed({
+  events,
+  tape = [],
+  meta,
+  onNeedMoreTape,
+}: {
+  events: BlockEvent[];
+  tape?: PricePoint[];
+  meta?: Meta | null;
+  onNeedMoreTape?: () => void;
+}) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [capacity, setCapacity] = useState(MAX_ROWS);
   const [filter, setFilter] = useState<Filter>("live");
@@ -93,7 +103,10 @@ export default function Feed({ events, tape = [], meta }: { events: BlockEvent[]
           <button
             type="button"
             className={filter === "fills" ? styles.tabOn : styles.tab}
-            onClick={() => setFilter("fills")}
+            onClick={() => {
+              setFilter("fills");
+              onNeedMoreTape?.();
+            }}
             aria-pressed={filter === "fills"}
           >
             FILLS

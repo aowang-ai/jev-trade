@@ -45,10 +45,15 @@ export interface Fill {
   dir?: "open" | "close" | "flip";
 }
 
-/** Compact all-time mid print. Fills sit on this series, not the decision window. */
+/** Compact tape print. Candles carry o/h/l/c. Fills sit on this series. */
 export interface PricePoint {
   ts: number;
   mid: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  bar?: "1s" | "1m" | "15m";
   block?: number;
   fill?: { side: Side; price: number; size: number; dir?: "open" | "close" | "flip"; hash?: string };
 }

@@ -1,12 +1,11 @@
 import { expect, test } from "bun:test";
-import { jevQuestions, type TradeState } from "../src/model";
+import { jevQuestions, marketFacing, type TradeState } from "../src/model";
 
 function fixture(side: TradeState["position"]["side"]): TradeState {
   return {
     coin: "BTC",
     market: "BTC-USD",
     tick: 1,
-    horizonTicks: 100,
     tickMs: 500,
     mid: 77000,
     spreadBps: 0.13,
@@ -17,7 +16,6 @@ function fixture(side: TradeState["position"]["side"]): TradeState {
     recentMids: "",
     trades: { count: 0, buySz: 0, sellSz: 0, cvdSz: 0, vwap: null, lastPrice: null, lastSide: null },
     recentTrades: [],
-    recentFills: [],
     position: {
       coin: "BTC",
       side,
@@ -27,13 +25,7 @@ function fixture(side: TradeState["position"]["side"]): TradeState {
       leverage: 1,
       liquidationPx: null,
       distanceBps: null,
-      unrealizedUsd: 0,
-      realizedUsd: 0,
-      feesUsd: 0,
-      pnlUsd: 0,
-      pnlPct: 0,
-      equity: 200,
-      withdrawable: 200,
+      unrealizedUsd: side === "flat" ? 0 : -1.25,
     },
     indicators: {
       sma20: null, sma50: null, ema20: null, midVsSma20Bps: null, midVsSma50Bps: null,
@@ -51,22 +43,75 @@ function blob(side: TradeState["position"]["side"]) {
   return JSON.stringify(jevQuestions(fixture(side))).toLowerCase();
 }
 
-test("Jev questions name the actions and do not set a trade hurdle", () => {
+const scoreboard = [
+  "recentfills",
+  "this wallet",
+  "realized",
+  "feesusd",
+  "pnlusd",
+  "pnlpct",
+  "pnl $",
+  "equity=",
+  "withdrawable",
+  "worth paying",
+  "not worth trading",
+  "most ticks",
+  "clears the spread",
+  "round trip",
+  "by more than the spread",
+  "only when",
+  "pick this when",
+  "stay flat",
+  "you are flat",
+  "leave it alone",
+  "ignored on a hold",
+  "horizonticks",
+  "post-only",
+  "no order",
+  "spread=",
+];
+
+test("Jev questions name the actions and do not coach a pick", () => {
   const flat = blob("flat");
   const long = blob("long");
-  expect(flat).toContain("open btc on the long/short you picked.");
-  expect(flat).toContain("stay flat. no order is sent.");
-  expect(long).toContain("flatten the live btc position.");
-  expect(long).toContain("leave the position as it is. send nothing.");
+  expect(flat).toContain("open or hold btc?");
+  expect(flat).toContain('"open":"open"');
+  expect(flat).toContain('"hold":"hold"');
+  expect(long).toContain("open, close, or hold btc?");
+  expect(long).toContain('"close":"close"');
   for (const text of [flat, long]) {
-    expect(text).not.toContain("worth paying");
-    expect(text).not.toContain("not worth trading");
-    expect(text).not.toContain("most ticks");
-    expect(text).not.toContain("clears the spread");
-    expect(text).not.toContain("round trip");
-    expect(text).not.toContain("by more than the spread");
-    expect(text).not.toContain("only when");
-    expect(text).not.toContain("pick this when");
-    expect(text).not.toContain("horizonTicks".toLowerCase());
+    for (const phrase of scoreboard) {
+      expect(text).not.toContain(phrase);
+    }
   }
+});
+
+test("evaluate state is the book and live position, not the wallet scoreboard", () => {
+  const fat = {
+    ...fixture("flat"),
+    recentFills: ["sell 0.001 @ 77000 close"],
+    horizonTicks: 100,
+    position: {
+      ...fixture("flat").position,
+      realizedUsd: -10.5,
+      feesUsd: 3.8,
+      pnlUsd: -14.3,
+      pnlPct: -7,
+      equity: 185,
+      withdrawable: 185,
+    },
+  };
+  const seen = marketFacing(fat as TradeState);
+  const text = JSON.stringify(seen).toLowerCase();
+  expect(seen.book).toEqual(fat.book);
+  expect(seen.trades).toEqual(fat.trades);
+  expect(seen.position.side).toBe("flat");
+  expect("unrealizedUsd" in seen.position).toBe(false);
+  for (const phrase of ["recentfills", "realizedusd", "feesusd", "pnlusd", "pnlpct", "equity", "withdrawable", "horizonticks"]) {
+    expect(text).not.toContain(phrase);
+  }
+
+  const open = marketFacing(fixture("long"));
+  expect(open.position.unrealizedUsd).toBe(-1.25);
+  expect(JSON.stringify(open).toLowerCase()).not.toContain("pnlusd");
 });

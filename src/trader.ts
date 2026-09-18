@@ -58,7 +58,6 @@ export class Trader {
     if (this.totals.blocks % 5 === 0) this.market.refresh().catch(() => {});
     if (this.busy) {
       this.totals.lateBlocks++;
-      if (this.lastBook) this.emit(block, this.lastBook, null, null, true);
       return;
     }
     this.busy = true;
@@ -75,8 +74,6 @@ export class Trader {
       const timing = { readMs: Math.round(readMs), loopMs: 0 };
       if (Date.now() < this.jevPauseUntil) {
         this.totals.lateBlocks++;
-        timing.loopMs = Math.round(performance.now() - t0);
-        this.emit(block, book, null, null, true, timing);
         return;
       }
       try {
@@ -102,12 +99,9 @@ export class Trader {
           console.error(`tick ${block}:`, msg);
         }
         this.totals.lateBlocks++;
-        timing.loopMs = Math.round(performance.now() - t0);
-        this.emit(block, book, null, null, true, timing);
       }
     } catch (e) {
       console.error(`tick ${block}:`, (e as Error).message);
-      if (this.lastBook) this.emit(block, this.lastBook, null, null, true);
     } finally {
       this.busy = false;
     }
@@ -214,17 +208,12 @@ export class Trader {
     const a = this.market.account;
     const entry = this.entryPrice();
     const unrealized = a ? a.unrealizedUsd : this.unrealizedUsd(book.mid);
-    const realized = a ? a.realizedUsd : this.totals.realizedUsd;
-    const fees = a ? a.feesUsd : this.totals.gasUsd;
-    const equity = a?.accountValue ?? 0;
-    const pnlUsd = realized + unrealized - fees;
     const indicators = snapNums(snapshotIndicators(this.market.candleCloses(80), book.mid));
     const asset = snapNums(venueFeatures(this.market.assetCtx, book.mid));
     return {
       coin: this.market.coin,
       market: this.market.pair,
       tick: block,
-      horizonTicks: H,
       tickMs: config.tickMs,
       mid: book.mid,
       spreadBps: round(book.spreadBps, 2),
@@ -235,7 +224,6 @@ export class Trader {
       recentMids: sampled.map((x) => x.toFixed(6)).join(" "),
       trades: this.trades ? this.trades.summary(H, block) : emptySummary(),
       recentTrades: (this.trades?.recent(10) ?? []).map((t) => `${t.block} ${t.side} ${round(t.size, 1)} @ ${t.price.toFixed(6)}`),
-      recentFills: this.market.fillPrints.slice(-8).map((f) => `${f.side} ${round(f.size, 6)} @ ${f.price}${f.dir ? ` ${f.dir}` : ""}`),
       position: {
         coin: this.market.coin,
         side: posSz > 0 ? "long" : posSz < 0 ? "short" : "flat",
@@ -246,12 +234,6 @@ export class Trader {
         liquidationPx: a?.liquidationPx ?? null,
         distanceBps: rnull(bpsBetween(entry, book.mid), 2),
         unrealizedUsd: round(unrealized, 4),
-        realizedUsd: round(realized, 4),
-        feesUsd: round(fees, 4),
-        pnlUsd: round(pnlUsd, 4),
-        pnlPct: round(equity ? (pnlUsd / equity) * 100 : 0, 4),
-        equity: round(equity, 4),
-        withdrawable: round(this.market.margin.usdc, 4),
       },
       indicators,
       asset: { ...asset, maxLeverage: this.market.maxLeverage },

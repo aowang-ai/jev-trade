@@ -15,7 +15,7 @@
   background: var(--panel);
   border: 0;
   overflow: hidden;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
   user-select: none;
 }
@@ -36,25 +36,6 @@
   height: 100%;
 }
 
-.line {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.mark {
-  stroke: #ffffff;
-  stroke-width: 1;
-}
-
-.markQuote {
-  stroke: #ffffff;
-  stroke-width: 1.2;
-  opacity: 0.55;
-}
-
 .legend {
   position: absolute;
   right: 16px;
@@ -67,16 +48,37 @@
   pointer-events: none;
 }
 
+.legUp::before,
+.legDown::before,
 .legBuy::before,
 .legSell::before {
   content: "";
   display: inline-block;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+.legUp::before,
+.legDown::before {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #000;
+}
+
+.legUp::before {
+  background: #000;
+}
+
+.legDown::before {
+  background: #fff;
+}
+
+.legBuy::before,
+.legSell::before {
   width: 0;
   height: 0;
-  margin-right: 4px;
   border-left: 3px solid transparent;
   border-right: 3px solid transparent;
-  vertical-align: 1px;
 }
 
 .legBuy::before {

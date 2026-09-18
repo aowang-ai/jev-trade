@@ -9,7 +9,6 @@ export interface TradeState {
   coin: string;
   market: string;
   tick: number;
-  horizonTicks: number;
   tickMs: number;
   mid: number;
   spreadBps: number;
@@ -20,10 +19,9 @@ export interface TradeState {
   book: { bids: string[]; asks: string[] };
   returnsBps: { last1: number; last5: number; last20: number; last100: number };
   recentMids: string;
-  /** Taker prints over the last `horizonTicks`. cvdSz = taker buy size minus taker sell size. */
+  /** Taker prints in the lookback window. cvdSz = taker buy size minus taker sell size. */
   trades: { count: number; buySz: number; sellSz: number; cvdSz: number; vwap: number | null; lastPrice: number | null; lastSide: Side | null };
   recentTrades: string[];
-  recentFills: string[];
   position: {
     coin: string;
     side: "long" | "short" | "flat";
@@ -34,12 +32,6 @@ export interface TradeState {
     liquidationPx: number | null;
     distanceBps: number | null;
     unrealizedUsd: number;
-    realizedUsd: number;
-    feesUsd: number;
-    pnlUsd: number;
-    pnlPct: number;
-    equity: number;
-    withdrawable: number;
   };
   indicators: {
     sma20: number | null;
@@ -90,59 +82,91 @@ export interface Model {
   decide(state: TradeState): Promise<ModelDecision>;
 }
 
-/** What Jev is asked. Mechanics only: no hurdle, horizon, or "when to trade" rule. */
+/** Book, tape, and the open position. Wallet fills and lifetime PnL stay off this object. */
+export function marketFacing(state: TradeState) {
+  const pos = state.position;
+  return {
+    coin: state.coin,
+    market: state.market,
+    tick: state.tick,
+    tickMs: state.tickMs,
+    mid: state.mid,
+    spreadBps: state.spreadBps,
+    bookImbalance: state.bookImbalance,
+    depth: state.depth,
+    book: state.book,
+    returnsBps: state.returnsBps,
+    recentMids: state.recentMids,
+    trades: state.trades,
+    recentTrades: state.recentTrades,
+    position: {
+      coin: pos.coin,
+      side: pos.side,
+      size: pos.size,
+      notionalUsd: pos.notionalUsd,
+      entry: pos.entry,
+      leverage: pos.leverage,
+      liquidationPx: pos.liquidationPx,
+      distanceBps: pos.distanceBps,
+      ...(pos.side === "flat" ? {} : { unrealizedUsd: pos.unrealizedUsd }),
+    },
+    indicators: state.indicators,
+    asset: state.asset,
+    maxLeverage: state.maxLeverage,
+  };
+}
+
+/** Labels and live fields only. No advice about when to pick an action. */
 export function jevQuestions(state: TradeState) {
   const asset = state.coin;
   const pos = state.position;
   const stance = pos.side === "flat"
     ? `flat ${asset}`
-    : `${pos.side} ${pos.size} ${asset} @ ${pos.entry ?? "?"} pnl $${pos.pnlUsd} (${pos.pnlPct}%)`;
+    : `${pos.side} ${pos.size} ${asset} @ ${pos.entry ?? "?"}`;
   const levNow = pos.leverage != null ? `${pos.leverage}x` : "unset";
   const rungs = leverageRungs(state.maxLeverage);
   const levCriteria: Record<string, string> = {};
   for (const n of rungs) {
-    levCriteria[String(n)] = `${n}x cross leverage on ${asset}.`;
+    levCriteria[String(n)] = `${n}x`;
   }
-  const ctx = `You trade only ${asset} (${state.market}) on Hyperliquid. position is the live book and PnL (unrealizedUsd, realizedUsd, feesUsd, pnlUsd, pnlPct, liquidationPx). indicators are from 1m closes (sma20, sma50, ema20, rsi14, vol20Bps, rangePos20, midVsSma20Bps). asset is mark/oracle/fundingBps/premiumBps/openInterest/dayChangeBps/dayNtlVlmUsd. trades and book are the live tape. recentFills are this wallet's fills.`;
-  const mechanics = `An open rests a post-only limit one tick inside the touch (maker). A close is an Ioc that crosses the touch (taker). A hold sends no order and cancels any resting quote. Live spread is ${state.spreadBps} bps.`;
+  const ctx = `${asset} ${state.market}. position has side/size/entry. indicators are 1m sma/ema/rsi/vol. asset is mark/oracle/funding/oi. trades and book are the tape.`;
   const bias = {
     type: "choice",
     instructions: {
-      question: `Should the ${asset} book be long or short after this tick?`,
-      goal: `Trade ${state.market} on Hyperliquid. You pick long or short. The bot does not flip your side.`,
-      timing: `Ticks are ~${config.tickMs}ms. Current position: ${stance}.`,
+      question: `long or short ${asset}?`,
+      goal: `${state.market}`,
+      timing: `tickMs=${state.tickMs}. position=${stance}.`,
       inputs: ctx,
     },
     criteria: {
-      long: `Long ${asset}.`,
-      short: `Short ${asset}.`,
+      long: "long",
+      short: "short",
     },
   };
   const leverage = {
     type: "choice",
     instructions: {
-      question: `What cross leverage should the ${asset} account use this tick?`,
-      goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x.`,
-      timing: "Leverage is updated on the wallet before the order is sent. It is ignored on a hold.",
-      inputs: `${ctx} Allowed rungs: ${rungs.join(" ")}.`,
+      question: `cross leverage for ${asset}?`,
+      goal: `current ${levNow}. max ${state.maxLeverage}x.`,
+      timing: `rungs ${rungs.join(" ")}`,
+      inputs: ctx,
     },
     criteria: levCriteria,
   };
-  const money = `equity=${pos.equity} withdrawable=${pos.withdrawable} notional=${pos.notionalUsd}`;
   if (pos.side === "flat") {
     return {
       bias,
       intent: {
         type: "choice",
         instructions: {
-          question: `Take a ${asset} position this tick, or stay flat?`,
-          goal: `You are flat. Open starts a position in the long/short you picked. Hold stays flat and sends no order.`,
-          timing: mechanics,
-          inputs: `${ctx} Current: ${stance}. ${money}.`,
+          question: `open or hold ${asset}?`,
+          goal: `position=${stance}.`,
+          timing: `tickMs=${state.tickMs}`,
+          inputs: ctx,
         },
         criteria: {
-          open: `Open ${asset} on the long/short you picked.`,
-          hold: `Stay flat. No order is sent.`,
+          open: "open",
+          hold: "hold",
         },
       },
       leverage,
@@ -153,15 +177,15 @@ export function jevQuestions(state: TradeState) {
     intent: {
       type: "choice",
       instructions: {
-        question: `Add to the ${asset} position, flatten it, or leave it alone this tick?`,
-        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is. Hold sends nothing and leaves the position untouched.",
-        timing: mechanics,
-        inputs: `${ctx} Current: ${stance}. ${money}.`,
+        question: `open, close, or hold ${asset}?`,
+        goal: `position=${stance}.`,
+        timing: `tickMs=${state.tickMs}`,
+        inputs: ctx,
       },
       criteria: {
-        open: `Add to ${asset} on the long/short you picked.`,
-        close: `Flatten the live ${asset} position.`,
-        hold: `Leave the position as it is. Send nothing.`,
+        open: "open",
+        close: "close",
+        hold: "hold",
       },
     },
     leverage,
@@ -243,26 +267,42 @@ function typesafeClient(): TypeSafeClient {
   }));
 }
 
+const JEV_DEADLINE_MS = 4000;
+
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`jev timeout ${ms}ms`)), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 async function callJev(state: TradeState): Promise<{ answers: JevAnswers; inputTokens: number }> {
+  const seen = marketFacing(state);
   const qs = jevQuestions(state);
-  if (config.jevProvider === "gateway") {
-    const r = await evaluate({
-      model: config.jevModelId,
-      state: state as never,
-      questions: qs,
-      maxRetries: 0,
-    });
-    return { answers: r.answers, inputTokens: r.usage?.inputTokens ?? 0 };
-  }
-  const r = await typesafeClient().systemOne(
-    {
-      model: config.jevModelId,
-      state: state as never,
-      questions: qs,
-    },
-    { retry: { maxRetries: 0 } },
-  );
-  return { answers: r.answers, inputTokens: r.usage.input_tokens ?? 0 };
+  const run = async () => {
+    if (config.jevProvider === "gateway") {
+      const r = await evaluate({
+        model: config.jevModelId,
+        state: seen as never,
+        questions: qs,
+        maxRetries: 0,
+      });
+      return { answers: r.answers, inputTokens: r.usage?.inputTokens ?? 0 };
+    }
+    const r = await typesafeClient().systemOne(
+      {
+        model: config.jevModelId,
+        state: seen as never,
+        questions: qs,
+      },
+      { retry: { maxRetries: 0 } },
+    );
+    return { answers: r.answers, inputTokens: r.usage.input_tokens ?? 0 };
+  };
+  return withDeadline(run(), JEV_DEADLINE_MS);
 }
 
 /** Real Jev. JEV_PROVIDER selects official TypeSafe or Vercel AI Gateway. */
@@ -274,7 +314,6 @@ export class JevModel implements Model {
     const r = await callJev(state);
     const flat = state.position.side === "flat";
     const bias = pick(r.answers.bias?.choice, ["long", "short"] as const, "long");
-    // Standing down is the safe read of a missing or unusable answer.
     const choices = flat ? (["open", "hold"] as const) : (["open", "close", "hold"] as const);
     const intent = liveIntent(state.position.side, pick(r.answers.intent?.choice, choices, "hold"));
     const dir = choiceProbs(r.answers.bias, ["long", "short"]);

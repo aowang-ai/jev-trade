@@ -215,8 +215,10 @@ export class Feed {
   }
 
   private maybePrice() {
-    if (!this.book || !this.onPrice) return;
+    if (!this.book) return;
     const now = Date.now();
+    this.chart.addMid(this.book.mid, now);
+    if (!this.onPrice) return;
     if (now - this.lastPriceAt < config.priceMs) return;
     if (this.book.mid === this.lastPriceMid) return;
     this.lastPriceAt = now;

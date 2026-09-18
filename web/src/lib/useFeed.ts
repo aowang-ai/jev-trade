@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useReducer } from "react";
-import { mergeLiveTape, pushLive } from "./live";
+import { useCallback, useEffect, useReducer, useRef } from "react";
+import { applyLiveMid } from "./ohlc";
 import type { BlockEvent, ConnectionState, FeedState, Fill, Meta, PricePoint, Quote, SleeveFeed } from "./types";
 
 const CAP = 1000;
@@ -24,7 +24,6 @@ interface SleeveMem extends SleeveFeed {
   latSum: number;
   latCount: number;
   mark: Mark | null;
-  live: PricePoint[];
 }
 
 interface State {
@@ -50,7 +49,6 @@ const emptySleeve = (): SleeveMem => ({
   latSum: 0,
   latCount: 0,
   mark: null,
-  live: [],
 });
 
 function latencyOf(e: BlockEvent): number | null {
@@ -111,6 +109,15 @@ function stubLatest(coin: string, mark: Mark): BlockEvent {
   };
 }
 
+function lastRealDecision(s: SleeveMem): BlockEvent | null {
+  if (s.latest?.decision && !s.latest.decision.late) return s.latest;
+  for (let i = s.events.length - 1; i >= 0; i--) {
+    const e = s.events[i]!;
+    if (e.decision && !e.decision.late) return e;
+  }
+  return s.latest;
+}
+
 function paintLatest(coin: string, latest: BlockEvent | null, mark: Mark | null): BlockEvent | null {
   if (!mark) return latest;
   if (!latest) return stubLatest(coin, mark);
@@ -155,7 +162,6 @@ function fromHistory(history: BlockEvent[], tape: PricePoint[]): SleeveMem {
     mark: latest
       ? { ts: latest.ts, mid: latest.mid, bestBid: latest.bestBid, bestAsk: latest.bestAsk, spreadBps: latest.spreadBps }
       : null,
-    live: [],
   });
 }
 
@@ -225,7 +231,7 @@ function reducer(state: State, action: Action): State {
       return replaceSleeve(state, action.coin, {
         ...s,
         mark: action.mark,
-        live: pushLive(s.live, { ts: action.mark.ts, mid: action.mark.mid }),
+        tape: applyLiveMid(s.tape, action.mark.mid, action.mark.ts),
       });
     }
 
@@ -356,19 +362,38 @@ function mapByCoin(raw: unknown): Record<string, unknown[]> {
   return out;
 }
 
+function snapshotFrom(data: unknown): {
+  meta: Meta | null;
+  historyByCoin: Record<string, BlockEvent[]>;
+  tapeByCoin: Record<string, PricePoint[]>;
+} {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const historyByCoin: Record<string, BlockEvent[]> = {};
+  const tapeByCoin: Record<string, PricePoint[]> = {};
+  const histMap = mapByCoin(d.historyByCoin);
+  const tapeMap = mapByCoin(d.tapeByCoin);
+  for (const [coin, rows] of Object.entries(histMap)) historyByCoin[coin] = asEvents(rows);
+  for (const [coin, rows] of Object.entries(tapeMap)) tapeByCoin[coin] = asTape(rows);
+  if (!Object.keys(historyByCoin).length && Array.isArray(d.history)) {
+    const coin = typeof d.coin === "string" ? d.coin : "BTC";
+    historyByCoin[coin] = asEvents(d.history);
+    tapeByCoin[coin] = asTape(d.tape);
+  }
+  return { meta: parseMeta(d), historyByCoin, tapeByCoin };
+}
+
 /**
- * Live sleeve feed over SSE.
- *
- * Connects to `${apiUrl}/events` and handles: `snapshot` (meta + historyByCoin + tapeByCoin),
- * `block` (per coin, deduped by block number, capped at 1000), `price` (live mid), `quote` / `fill`
- * ({ coin, block, ... }) and `ping`. Reconnects with 1s -> 10s backoff.
+ * Live sleeve feed. First paint comes from gzipped GET /snapshot.
+ * SSE is lite after that. Longer chart windows pull /tape on demand.
  */
-export function useFeed(apiUrl: string): FeedState {
+export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
   const [state, dispatch] = useReducer(reducer, {
     meta: null,
     connection: "connecting" as ConnectionState,
     sleeves: {},
   });
+  const loadTapeRef = useRef(() => {});
+  const loadTape = useCallback(() => loadTapeRef.current(), []);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof EventSource === "undefined") return;
@@ -376,6 +401,8 @@ export function useFeed(apiUrl: string): FeedState {
 
     let closed = false;
     let attempt = 0;
+    let haveSnapshot = false;
+    let tapeStatus: "idle" | "loading" | "done" = "idle";
     let es: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let staleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -422,48 +449,72 @@ export function useFeed(apiUrl: string): FeedState {
       });
     };
 
-    const hydrateTape = async (base: string) => {
+    const applySnapshot = (data: unknown) => {
+      const next = snapshotFrom(data);
+      if (!Object.keys(next.historyByCoin).length && !Object.keys(next.tapeByCoin).length && !next.meta) return;
+      haveSnapshot = true;
+      dispatch({ type: "snapshot", ...next });
+    };
+
+    const hydrateTape = async () => {
+      if (tapeStatus !== "idle") return;
+      tapeStatus = "loading";
       try {
         const r = await fetch(`${base}/tape`);
-        if (!r.ok) return;
+        if (!r.ok) {
+          tapeStatus = "idle";
+          return;
+        }
         const raw = await r.json();
         const tapeByCoin: Record<string, PricePoint[]> = {};
         for (const [coin, rows] of Object.entries(mapByCoin(raw))) tapeByCoin[coin] = asTape(rows);
         if (Object.keys(tapeByCoin).length) dispatch({ type: "tapes", tapeByCoin });
+        tapeStatus = "done";
       } catch {
-        // Compact snapshot tape is enough for the default chart.
+        tapeStatus = "idle";
       }
+    };
+    loadTapeRef.current = hydrateTape;
+
+    let snapInflight: Promise<boolean> | null = null;
+    const pullSnapshot = (): Promise<boolean> => {
+      if (snapInflight) return snapInflight;
+      snapInflight = (async () => {
+        try {
+          const r = await fetch(`${base}/snapshot`);
+          if (!r.ok) return false;
+          applySnapshot(await r.json());
+          return true;
+        } catch {
+          return false;
+        } finally {
+          snapInflight = null;
+        }
+      })();
+      return snapInflight;
     };
 
     function connect() {
       if (closed) return;
       dispatch({ type: "connection", connection: attempt === 0 ? "connecting" : "reconnecting" });
-      es = new EventSource(`${base}/events`);
+      void pullSnapshot();
+      es = new EventSource(`${base}/events?lite=1`);
 
       es.onopen = () => {
         attempt = 0;
         dispatch({ type: "connection", connection: "live" });
-        armStaleTimer(FIRST_EVENT_MS);
+        armStaleTimer(haveSnapshot ? STALE_MS : FIRST_EVENT_MS);
+        if (!haveSnapshot) void pullSnapshot();
       };
       es.onerror = () => {
         if (!closed) scheduleReconnect();
       };
 
       handle("snapshot", (data) => {
-        const d = (data ?? {}) as Record<string, unknown>;
-        const historyByCoin: Record<string, BlockEvent[]> = {};
-        const tapeByCoin: Record<string, PricePoint[]> = {};
-        const histMap = mapByCoin(d.historyByCoin);
-        const tapeMap = mapByCoin(d.tapeByCoin);
-        for (const [coin, rows] of Object.entries(histMap)) historyByCoin[coin] = asEvents(rows);
-        for (const [coin, rows] of Object.entries(tapeMap)) tapeByCoin[coin] = asTape(rows);
-        if (!Object.keys(historyByCoin).length && Array.isArray(d.history)) {
-          const coin = typeof d.coin === "string" ? d.coin : "BTC";
-          historyByCoin[coin] = asEvents(d.history);
-          tapeByCoin[coin] = asTape(d.tape);
-        }
-        dispatch({ type: "snapshot", meta: parseMeta(d), historyByCoin, tapeByCoin });
-        void hydrateTape(base);
+        applySnapshot(data);
+      });
+      handle("ready", () => {
+        if (!haveSnapshot) void pullSnapshot();
       });
       handle("block", (data) => {
         dispatch({ type: "block", event: data as BlockEvent });
@@ -508,6 +559,7 @@ export function useFeed(apiUrl: string): FeedState {
 
     return () => {
       closed = true;
+      loadTapeRef.current = () => {};
       if (retryTimer) clearTimeout(retryTimer);
       teardown();
     };
@@ -517,11 +569,11 @@ export function useFeed(apiUrl: string): FeedState {
   for (const [coin, s] of Object.entries(state.sleeves)) {
     byCoin[coin] = {
       events: s.events,
-      tape: mergeLiveTape(s.tape, s.live),
-      latest: paintLatest(coin, s.latest, s.mark),
+      tape: s.tape,
+      latest: paintLatest(coin, lastRealDecision(s), s.mark),
       avgLatencyMs: s.avgLatencyMs,
     };
   }
 
-  return { meta: state.meta, connection: state.connection, byCoin };
+  return { meta: state.meta, connection: state.connection, byCoin, loadTape };
 }
