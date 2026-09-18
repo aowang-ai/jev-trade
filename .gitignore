@@ -3,3 +3,4 @@ node_modules
 data/
 docs/
 .wallets.json
+.cursor/

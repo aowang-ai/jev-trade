@@ -41,7 +41,7 @@ const jevModelId = resolveJevModelId(process.env, jevProvider);
 
 export const config = {
   hlTestnet,
-  tickMs: Number(env("TICK_MS", "500")),
+  tickMs: Number(env("TICK_MS", "1000")),
   explorerTx: hlTestnet
     ? "https://app.hyperliquid-testnet.xyz/explorer/tx/"
     : "https://app.hyperliquid.xyz/explorer/tx/",
