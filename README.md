@@ -35,7 +35,27 @@ Open http://localhost:3001. The page reads `$NEXT_PUBLIC_API_URL/events` (defaul
 
 ## Live Jev
 
-Set `MODEL=jev` and `AI_GATEWAY_API_KEY` in `.env`. Restart the bot. Jev is called through Vercel AI Gateway (`JEV_MODEL_ID=typesafe-ai/jev`).
+Set `MODEL=jev` and pick an API. Official TypeSafe is the default.
+
+```sh
+MODEL=jev
+JEV_PROVIDER=typesafe
+TYPESAFE_API_KEY=
+# JEV_MODEL_ID defaults to jev-latest
+```
+
+Get a key from [docs.typesafe.ai](https://docs.typesafe.ai/).
+
+Vercel AI Gateway is still supported:
+
+```sh
+MODEL=jev
+JEV_PROVIDER=gateway
+AI_GATEWAY_API_KEY=
+# JEV_MODEL_ID defaults to typesafe-ai/jev
+```
+
+If `JEV_PROVIDER` is unset, the bot uses TypeSafe when `TYPESAFE_API_KEY` is set, otherwise Gateway when `AI_GATEWAY_API_KEY` is set.
 
 ## Live testnet orders
 
@@ -63,7 +83,10 @@ See [`.env.example`](.env.example). The ones that change behavior:
 | --- | --- | --- |
 | `HL_COINS` | `BTC,ETH,SOL,DOGE,BNB` | Sleeves to run |
 | `HL_TESTNET` | `true` | `false` is mainnet |
-| `MODEL` | `mock` | `jev` needs `AI_GATEWAY_API_KEY` |
+| `MODEL` | `mock` | `jev` needs a TypeSafe or Gateway key |
+| `JEV_PROVIDER` | `typesafe` | `typesafe` or `gateway` |
+| `TYPESAFE_API_KEY` | empty | Official TypeSafe key |
+| `AI_GATEWAY_API_KEY` | empty | Vercel AI Gateway key |
 | `PRIVATE_KEY` | empty | First coin. Empty is a dry run |
 | `DRY_RUN` | `false` | `true` simulates every sleeve |
 | `TICK_MS` | `500` | Decision + requote cadence |

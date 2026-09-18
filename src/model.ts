@@ -1,5 +1,6 @@
 import { experimental_evaluate as evaluate } from "ai";
-import { config } from "./config";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
+import { assertJevCredentials, config } from "./config";
 import { leverageRungs, liveIntent, parseLeverage, quoteAction, type Bias, type Intent } from "./plan";
 import type { Action, Side } from "./types";
 
@@ -194,18 +195,48 @@ function pairProbs(answer: { choice?: string; probabilities?: Record<string, num
   return [left / sum, right / sum];
 }
 
-/** Real Jev via Vercel AI Gateway. Swap-in is the MODEL env var. */
+type ChoiceAnswer = { choice?: string; probabilities?: Record<string, number> };
+type JevAnswers = { bias?: ChoiceAnswer; intent?: ChoiceAnswer; leverage?: ChoiceAnswer };
+
+let typesafe: TypeSafeClient | undefined;
+
+function typesafeClient(): TypeSafeClient {
+  return (typesafe ??= new TypeSafeClient({
+    apiKey: process.env.TYPESAFE_API_KEY,
+    defaultModel: config.jevModelId,
+    retry: { maxRetries: 0 },
+  }));
+}
+
+async function callJev(state: TradeState): Promise<{ answers: JevAnswers; inputTokens: number }> {
+  const qs = questions(state);
+  if (config.jevProvider === "gateway") {
+    const r = await evaluate({
+      model: config.jevModelId,
+      state: state as never,
+      questions: qs,
+      maxRetries: 0,
+    });
+    return { answers: r.answers, inputTokens: r.usage?.inputTokens ?? 0 };
+  }
+  const r = await typesafeClient().systemOne(
+    {
+      model: config.jevModelId,
+      state: state as never,
+      questions: qs,
+    },
+    { retry: { maxRetries: 0 } },
+  );
+  return { answers: r.answers, inputTokens: r.usage.input_tokens ?? 0 };
+}
+
+/** Real Jev. JEV_PROVIDER selects official TypeSafe or Vercel AI Gateway. */
 export class JevModel implements Model {
   readonly name = "jev";
 
   async decide(state: TradeState): Promise<ModelDecision> {
     const t0 = performance.now();
-    const r = await evaluate({
-      model: config.jevModelId,
-      state: state as never,
-      questions: questions(state),
-      maxRetries: 0,
-    });
+    const r = await callJev(state);
     const bias = pick(r.answers.bias?.choice, "long", "short");
     const picked = pick(r.answers.intent?.choice, "open", "close");
     const intent = liveIntent(state.position.side, picked);
@@ -214,7 +245,7 @@ export class JevModel implements Model {
       ? [1, 0]
       : pairProbs(r.answers.intent, "open", "close");
     const leverage = parseLeverage(r.answers.leverage?.choice, state.maxLeverage, state.position.leverage ?? 1);
-    return pack(intent, bias, leverage, longP, shortP, openP, closeP, performance.now() - t0, r.usage?.inputTokens ?? 0);
+    return pack(intent, bias, leverage, longP, shortP, openP, closeP, performance.now() - t0, r.inputTokens);
   }
 }
 
@@ -244,4 +275,8 @@ export class MockModel implements Model {
   }
 }
 
-export const createModel = (): Model => (config.model === "jev" ? new JevModel() : new MockModel());
+export const createModel = (): Model => {
+  if (config.model !== "jev") return new MockModel();
+  assertJevCredentials(config.model, config.jevProvider, process.env);
+  return new JevModel();
+};

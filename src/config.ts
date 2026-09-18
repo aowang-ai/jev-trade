@@ -1,6 +1,43 @@
 const env = (key: string, fallback?: string) => process.env[key] ?? fallback;
 
+export type JevProvider = "typesafe" | "gateway";
+
+export function resolveJevProvider(e: {
+  JEV_PROVIDER?: string;
+  TYPESAFE_API_KEY?: string;
+  AI_GATEWAY_API_KEY?: string;
+}): JevProvider {
+  const explicit = e.JEV_PROVIDER?.trim().toLowerCase();
+  if (explicit === "typesafe" || explicit === "gateway") return explicit;
+  if (explicit) throw new Error("JEV_PROVIDER must be typesafe or gateway");
+  if (e.TYPESAFE_API_KEY?.trim()) return "typesafe";
+  if (e.AI_GATEWAY_API_KEY?.trim()) return "gateway";
+  return "typesafe";
+}
+
+export function resolveJevModelId(e: { JEV_MODEL_ID?: string }, provider: JevProvider): string {
+  const set = e.JEV_MODEL_ID?.trim();
+  if (set) return set;
+  return provider === "gateway" ? "typesafe-ai/jev" : "jev-latest";
+}
+
+export function assertJevCredentials(
+  model: string,
+  provider: JevProvider,
+  e: { TYPESAFE_API_KEY?: string; AI_GATEWAY_API_KEY?: string },
+): void {
+  if (model !== "jev") return;
+  if (provider === "typesafe" && !e.TYPESAFE_API_KEY?.trim()) {
+    throw new Error("MODEL=jev with JEV_PROVIDER=typesafe needs TYPESAFE_API_KEY. Get a key at https://docs.typesafe.ai/ or set JEV_PROVIDER=gateway with AI_GATEWAY_API_KEY.");
+  }
+  if (provider === "gateway" && !e.AI_GATEWAY_API_KEY?.trim()) {
+    throw new Error("MODEL=jev with JEV_PROVIDER=gateway needs AI_GATEWAY_API_KEY. Or set JEV_PROVIDER=typesafe with TYPESAFE_API_KEY.");
+  }
+}
+
 const hlTestnet = env("HL_TESTNET", "true") !== "false";
+const jevProvider = resolveJevProvider(process.env);
+const jevModelId = resolveJevModelId(process.env, jevProvider);
 
 export const config = {
   hlTestnet,
@@ -15,7 +52,9 @@ export const config = {
   quoteInsideTicks: Number(env("QUOTE_INSIDE_TICKS", "1")),
   horizonBlocks: Number(env("HORIZON_BLOCKS", "100")),
   model: env("MODEL", "mock") as "mock" | "jev",
-  jevModelId: env("JEV_MODEL_ID", "typesafe-ai/jev")!,
+  /** typesafe = official TypeSafe API. gateway = Vercel AI Gateway. */
+  jevProvider,
+  jevModelId,
   jevUsdPerMTok: 0.042,
   port: Number(env("PORT", "3000")),
   historySize: 1000,
