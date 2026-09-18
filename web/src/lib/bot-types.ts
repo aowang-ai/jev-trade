@@ -1,3 +1,4 @@
+/** Wire types. Copied to web/src/lib/bot-types.ts. Keep both files identical. */
 export type Action = "buy" | "sell" | "hold";
 export type Side = "buy" | "sell";
 export type Bias = "long" | "short";

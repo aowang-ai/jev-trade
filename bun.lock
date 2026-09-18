@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "jev-trader",
+      "name": "jev-trade",
       "dependencies": {
         "@ai-sdk/gateway": "^4.0.85",
         "@nktkas/hyperliquid": "^0.33.3",

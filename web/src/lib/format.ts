@@ -11,11 +11,8 @@ export function fmtInt(n: number | null | undefined): string {
   return INT.format(Math.round(safe(n)));
 }
 
-/** `xyz:NVDA` -> `NVDA`. */
 export function displayCoin(coin: string | null | undefined): string {
-  if (!coin) return "BTC";
-  const i = coin.indexOf(":");
-  return i >= 0 ? coin.slice(i + 1) : coin;
+  return coin || "BTC";
 }
 
 /** Price with decimals that fit BTC (~1) and ETH (~2). */

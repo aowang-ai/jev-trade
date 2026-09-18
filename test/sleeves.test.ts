@@ -1,32 +1,25 @@
 import { expect, test } from "bun:test";
-import { coinDex, coinLabel, coinPair, loadSleeves, parseWalletsJson, sameCoin } from "../src/sleeves";
+import { coinPair, loadSleeves, parseWalletsJson, sameCoin } from "../src/sleeves";
 
-test("coin helpers split HIP-3 names", () => {
-  expect(coinLabel("xyz:NVDA")).toBe("NVDA");
-  expect(coinDex("xyz:NVDA")).toBe("xyz");
-  expect(coinPair("xyz:GOLD")).toBe("GOLD-USD");
-  expect(coinLabel("BTC")).toBe("BTC");
-  expect(coinDex("BTC")).toBeUndefined();
+test("coinPair is the USD perp name", () => {
+  expect(coinPair("BTC")).toBe("BTC-USD");
   expect(coinPair("ETH")).toBe("ETH-USD");
 });
 
-test("sameCoin matches dex prefix or label", () => {
-  expect(sameCoin("xyz:NVDA", "xyz:NVDA")).toBe(true);
-  expect(sameCoin("NVDA", "xyz:NVDA")).toBe(true);
-  expect(sameCoin("xyz:NVDA", "NVDA")).toBe(true);
+test("sameCoin is exact", () => {
+  expect(sameCoin("BTC", "BTC")).toBe(true);
   expect(sameCoin("BTC", "ETH")).toBe(false);
   expect(sameCoin(undefined, "BTC")).toBe(false);
 });
 
 test("loadSleeves follows HL_COINS", () => {
   const prev = process.env.HL_COINS;
-  process.env.HL_COINS = "BTC,xyz:GOLD";
+  process.env.HL_COINS = "BTC,ETH";
   try {
     const sleeves = loadSleeves();
-    expect(sleeves.map((s) => s.coin)).toEqual(["BTC", "xyz:GOLD"]);
+    expect(sleeves.map((s) => s.coin)).toEqual(["BTC", "ETH"]);
     expect(sleeves[0]!.label).toBe("BTC");
-    expect(sleeves[1]!.label).toBe("GOLD");
-    expect(sleeves[1]!.pair).toBe("GOLD-USD");
+    expect(sleeves[1]!.pair).toBe("ETH-USD");
   } finally {
     if (prev == null) delete process.env.HL_COINS;
     else process.env.HL_COINS = prev;

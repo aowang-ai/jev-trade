@@ -1,0 +1,8 @@
+{
+  "sleeves": [
+    { "coin": "ETH", "privateKey": "0xYOUR_ETH_SLEEVE_KEY" },
+    { "coin": "SOL", "privateKey": "0xYOUR_SOL_SLEEVE_KEY" },
+    { "coin": "DOGE", "privateKey": "0xYOUR_DOGE_SLEEVE_KEY" },
+    { "coin": "BNB", "privateKey": "0xYOUR_BNB_SLEEVE_KEY" }
+  ]
+}

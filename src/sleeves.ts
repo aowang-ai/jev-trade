@@ -1,23 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { hexKey } from "./config";
 
-export function coinLabel(coin: string): string {
-  const i = coin.indexOf(":");
-  return i >= 0 ? coin.slice(i + 1) : coin;
-}
-
-export function coinDex(coin: string): string | undefined {
-  const i = coin.indexOf(":");
-  return i > 0 ? coin.slice(0, i) : undefined;
-}
-
 export function coinPair(coin: string): string {
-  return `${coinLabel(coin)}-USD`;
+  return `${coin}-USD`;
 }
 
 export function sameCoin(a: string | undefined, b: string): boolean {
-  if (!a) return false;
-  return a === b || coinLabel(a) === coinLabel(b);
+  return !!a && a === b;
 }
 
 export interface SleeveConfig {
@@ -83,7 +72,7 @@ export function loadSleeves(): SleeveConfig[] {
     return {
       coin,
       pair: coinPair(coin),
-      label: coinLabel(coin),
+      label: coin,
       privateKey: privateKey ? hexKey(privateKey) : undefined,
     };
   });

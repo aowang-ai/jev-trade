@@ -1,9 +1,16 @@
 {
-  "name": "jev-trader",
+  "name": "jev-trade",
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
   "license": "MIT",
+  "homepage": "https://www.jev-trade.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aowang-ai/jev-trade.git"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
@@ -19,6 +26,7 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch run src/index.ts",
+    "dev:web": "bun --cwd web run dev",
     "test": "bun test test"
   }
 }

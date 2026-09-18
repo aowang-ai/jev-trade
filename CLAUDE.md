@@ -19,12 +19,12 @@ Bot listens on `PORT` (default 3000). Dashboard `web/` is Next on 3001.
 
 ```sh
 bun run start
-cd web && NEXT_PUBLIC_API_URL=http://localhost:3000 bun run dev
+bun run dev:web
 ```
 
 ## Dashboard (`web/`)
 
-Next.js App Router. SSE client in `web/src/lib/useFeed.ts`. Wire types are `src/types.ts`; the dashboard imports them as types only.
+Next.js App Router. SSE client in `web/src/lib/useFeed.ts`. Wire types are `src/types.ts`. The dashboard keeps a copy in `web/src/lib/bot-types.ts` so the Vercel build does not need the repo root. Keep those two files identical. `bun test` diffs them.
 
 ## Testing
 
@@ -44,6 +44,6 @@ The demo is a live Jev trading bot on Hyperliquid. Every design or strategy chan
 >
 > It quotes Hyperliquid every tick.
 >
-> Demo link: https://jev-trader.vercel.app
+> Demo link: https://www.jev-trade.com/
 
 Non-negotiables: Jev makes the buy/sell call (not code), from the price feed; real trades from a real wallet; a quote every tick, not every N ticks. The demo is the live dashboard. No middle dots, em dashes or en dashes in any rendered text. No blinking or pulsing indicators.

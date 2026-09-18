@@ -5,7 +5,7 @@ import { config } from "./config";
 import { accountFromClearinghouse, fillDir, FillPnlBook, type ClearinghouseLike, type FillPnlLike, type VenueAccount } from "./account";
 import { quotePrice } from "./book";
 import type { Feed } from "./feed";
-import { coinDex, sameCoin, type SleeveConfig } from "./sleeves";
+import { sameCoin, type SleeveConfig } from "./sleeves";
 import type { Book, Fill, Quote, Side } from "./types";
 
 type Ex = ExchangeClient;
@@ -64,8 +64,7 @@ export class Market {
 
   async init() {
     const transport = new HttpTransport({ isTestnet: config.hlTestnet });
-    const dex = coinDex(this.coin);
-    const converter = await SymbolConverter.create({ transport, dexs: dex ? [dex] : false });
+    const converter = await SymbolConverter.create({ transport });
     const assetId = converter.getAssetId(this.coin);
     const szDecimals = converter.getSzDecimals(this.coin);
     if (assetId == null || szDecimals == null) throw new Error(`unknown Hyperliquid coin ${this.coin}`);
@@ -82,9 +81,6 @@ export class Market {
           this.lastSize = 0;
         }
       };
-      if (dex) await this.fundHip3(dex);
-      else await this.bringHome("xyz");
-      if (!dex) await this.flattenForeign(converter);
       await this.clearOpen();
     }
     await this.loadMaxLeverage();
@@ -103,169 +99,14 @@ export class Market {
 
   private async clearOpen() {
     if (!this.wallet || !this.ex) return;
-    const dex = coinDex(this.coin);
     try {
-      const opens = await this.info.openOrders({ user: this.wallet.address, ...(dex ? { dex } : {}) });
+      const opens = await this.info.openOrders({ user: this.wallet.address });
       const mine = opens.filter((o) => sameCoin(o.coin, this.coin));
       if (!mine.length) return;
       await this.ex.cancel({ cancels: mine.map((o) => ({ a: this.assetId, o: o.oid })) });
     } catch {
       // next quote will replace if we still see them
     }
-  }
-
-  /** This wallet only quotes `this.coin`. Close leftover perps from a previous sleeve. */
-  private async flattenForeign(converter: Awaited<ReturnType<typeof SymbolConverter.create>>) {
-    if (!this.wallet || !this.ex) return;
-    const user = this.wallet.address;
-    try {
-      const opens = await this.info.openOrders({ user }).catch(() => []);
-      const extra = opens.filter((o) => !sameCoin(o.coin, this.coin));
-      if (extra.length) {
-        await this.ex.cancel({
-          cancels: extra.map((o) => ({ a: converter.getAssetId(o.coin) ?? 0, o: o.oid })).filter((c) => c.a > 0),
-        }).catch(() => {});
-      }
-      const state = await this.info.clearinghouseState({ user }).catch(() => null);
-      for (const row of state?.assetPositions ?? []) {
-        const coin = row.position?.coin;
-        const szi = Number(row.position?.szi ?? 0);
-        if (!coin || !szi || sameCoin(coin, this.coin)) continue;
-        const asset = converter.getAssetId(coin);
-        const szDecimals = converter.getSzDecimals(coin) ?? 4;
-        if (asset == null) continue;
-        const res = await fetch(config.hlTestnet ? "https://api.hyperliquid-testnet.xyz/info" : "https://api.hyperliquid.xyz/info", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ type: "l2Book", coin }),
-        });
-        const book = (await res.json()) as { levels?: [{ px: string }[], { px: string }[]] };
-        const bid = Number(book.levels?.[0]?.[0]?.px ?? 0);
-        const ask = Number(book.levels?.[1]?.[0]?.px ?? 0);
-        const buy = szi < 0;
-        const raw = buy ? (ask || bid) * 1.02 : (bid || ask) * 0.98;
-        if (!(raw > 0)) continue;
-        await this.ex.order({
-          orders: [{
-            a: asset,
-            b: buy,
-            p: formatPrice(raw, szDecimals),
-            s: formatSize(Math.abs(szi), szDecimals),
-            r: true,
-            t: { limit: { tif: "Ioc" } },
-          }],
-          grouping: "na",
-        }).catch((e) => {
-          console.warn(`${this.label} close ${coin}: ${(e as Error).message.slice(0, 140)}`);
-        });
-      }
-    } catch (e) {
-      console.warn(`${this.label} flatten: ${(e as Error).message.slice(0, 160)}`);
-    }
-  }
-
-  private async fundHip3(dex: string) {
-    if (!this.wallet || !this.ex) return;
-    const user = this.wallet.address;
-    const xyz = await this.info.clearinghouseState({ user, dex }).catch(() => null);
-    if (Number(xyz?.marginSummary?.accountValue ?? 0) >= 1) {
-      if (xyz) this.applyClearinghouse(xyz);
-      return;
-    }
-    const home = await this.info.clearinghouseState({ user }).catch(() => null);
-    const wd = Number(home?.withdrawable ?? 0);
-    if (!(wd > 1)) return;
-    await this.sendUsdc("", dex, wd);
-    const funded = await this.info.clearinghouseState({ user, dex }).catch(() => null);
-    if (funded) this.applyClearinghouse(funded);
-  }
-
-  /** Pull leftover builder-DEX USDC back to the default perp account. */
-  private async bringHome(dex: string) {
-    if (!this.wallet || !this.ex) return;
-    const user = this.wallet.address;
-    const state = await this.info.clearinghouseState({ user, dex }).catch(() => null);
-    if (!state || Number(state.marginSummary?.accountValue ?? 0) < 0.5) return;
-    try {
-      const transport = new HttpTransport({ isTestnet: config.hlTestnet });
-      const converter = await SymbolConverter.create({ transport, dexs: [dex] });
-      const opens = await this.info.openOrders({ user, dex }).catch(() => []);
-      if (opens.length) {
-        await this.ex.cancel({
-          cancels: opens.map((o) => {
-            const id = converter.getAssetId(o.coin) ?? converter.getAssetId(`${dex}:${o.coin}`);
-            return { a: id ?? 0, o: o.oid };
-          }).filter((c) => c.a > 0),
-        }).catch(() => {});
-      }
-      for (const row of state.assetPositions ?? []) {
-        const coin = row.position?.coin;
-        const szi = Number(row.position?.szi ?? 0);
-        if (!coin || !szi) continue;
-        const asset = converter.getAssetId(coin) ?? converter.getAssetId(`${dex}:${coin}`);
-        const szDecimals = converter.getSzDecimals(coin) ?? converter.getSzDecimals(`${dex}:${coin}`) ?? 4;
-        if (asset == null) continue;
-        const res = await fetch(config.hlTestnet ? "https://api.hyperliquid-testnet.xyz/info" : "https://api.hyperliquid.xyz/info", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ type: "l2Book", coin }),
-        });
-        const book = (await res.json()) as { levels?: [{ px: string }[], { px: string }[]] };
-        const bid = Number(book.levels?.[0]?.[0]?.px ?? 0);
-        const ask = Number(book.levels?.[1]?.[0]?.px ?? 0);
-        const buy = szi < 0;
-        const raw = buy ? (ask || bid) * 1.02 : (bid || ask) * 0.98;
-        if (!(raw > 0)) continue;
-        await this.ex.order({
-          orders: [{
-            a: asset,
-            b: buy,
-            p: formatPrice(raw, szDecimals),
-            s: formatSize(Math.abs(szi), szDecimals),
-            r: true,
-            t: { limit: { tif: "Ioc" } },
-          }],
-          grouping: "na",
-        }).catch((e) => {
-          console.warn(`${this.label} close ${coin}: ${(e as Error).message.slice(0, 140)}`);
-        });
-      }
-    } catch (e) {
-      console.warn(`${this.label} unwind ${dex}: ${(e as Error).message.slice(0, 160)}`);
-    }
-    const after = await this.info.clearinghouseState({ user, dex }).catch(() => null);
-    const wd = Number(after?.withdrawable ?? 0);
-    if (!(wd > 1)) return;
-    await this.sendUsdc(dex, "", wd);
-  }
-
-  private async sendUsdc(sourceDex: string, destinationDex: string, withdrawable: number) {
-    if (!this.wallet || !this.ex) return;
-    const meta = await this.info.spotMeta();
-    const usdc = meta.tokens.find((t) => t.name === "USDC");
-    if (!usdc) {
-      console.warn(`${this.label} no USDC token`);
-      return;
-    }
-    const amount = (Math.floor((withdrawable - 0.01) * 100) / 100).toFixed(2);
-    let lastErr: unknown;
-    for (let i = 0; i < 4; i++) {
-      try {
-        await this.ex.sendAsset({
-          destination: this.wallet.address,
-          sourceDex,
-          destinationDex,
-          token: `USDC:${usdc.tokenId}`,
-          amount,
-        }, { timeout: 30_000 });
-        console.log(`${this.label} moved $${amount} USDC ${sourceDex || "perp"} -> ${destinationDex || "perp"}`);
-        return;
-      } catch (e) {
-        lastErr = e;
-        await Bun.sleep(1500 * (i + 1));
-      }
-    }
-    if (lastErr) console.warn(`${this.label} sendAsset: ${(lastErr as Error).message.slice(0, 180)}`);
   }
 
   applyClearinghouse(state: ClearinghouseLike) {
@@ -301,8 +142,7 @@ export class Market {
   async refresh() {
     if (!this.address) return;
     try {
-      const dex = coinDex(this.coin);
-      this.applyClearinghouse(await this.info.clearinghouseState({ user: this.address, ...(dex ? { dex } : {}) }));
+      this.applyClearinghouse(await this.info.clearinghouseState({ user: this.address }));
     } catch {
       // keep last balances
     }

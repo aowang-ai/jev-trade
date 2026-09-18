@@ -4,7 +4,7 @@ import { fillDir, type ClearinghouseLike, type FillPnlLike } from "./account";
 import { bookFromLevels } from "./book";
 import { CHART_INTERVAL, VenueChart } from "./chart";
 import { parseAssetCtx, type AssetCtx } from "./indicators";
-import { coinDex, sameCoin } from "./sleeves";
+import { sameCoin } from "./sleeves";
 import { TradeFeed } from "./trades";
 
 const INFO_URL = (testnet: boolean) =>
@@ -98,9 +98,7 @@ export class Feed {
     if (!this.user || this.ws?.readyState !== WebSocket.OPEN) return;
     this.send({ method: "subscribe", subscription: { type: "userFills", user: this.user } });
     this.send({ method: "subscribe", subscription: { type: "orderUpdates", user: this.user } });
-    if (!coinDex(this.coin)) {
-      this.send({ method: "subscribe", subscription: { type: "clearinghouseState", user: this.user } });
-    }
+    this.send({ method: "subscribe", subscription: { type: "clearinghouseState", user: this.user } });
   }
 
   private send(msg: unknown) {
@@ -154,7 +152,6 @@ export class Feed {
       return;
     }
     if (m.channel === "clearinghouseState" && m.data) {
-      if (coinDex(this.coin)) return;
       const state = m.data.clearinghouseState ?? m.data;
       if (state?.assetPositions || state?.marginSummary) this.onClearinghouse?.(state);
       return;

@@ -51,30 +51,6 @@ test("FillPnlBook sums closedPnl and fees once per tid", () => {
   expect(a.unrealizedUsd).toBeCloseTo(-1.23, 6);
 });
 
-test("accountFromClearinghouse matches HIP-3 label", () => {
-  const a = accountFromClearinghouse(
-    {
-      withdrawable: "199.10",
-      marginSummary: { accountValue: "199.10" },
-      assetPositions: [
-        {
-          position: {
-            coin: "NVDA",
-            szi: "1.25",
-            entryPx: "180.4",
-            unrealizedPnl: "0.5",
-            leverage: { type: "cross", value: 3 },
-          },
-        },
-      ],
-    },
-    "xyz:NVDA",
-  );
-  expect(a.positionSz).toBeCloseTo(1.25, 8);
-  expect(a.entryPrice).toBeCloseTo(180.4, 6);
-  expect(a.leverage).toBe(3);
-});
-
 test("fillDir maps Hyperliquid dir", () => {
   expect(fillDir("Open Long")).toBe("open");
   expect(fillDir("Close Short")).toBe("close");

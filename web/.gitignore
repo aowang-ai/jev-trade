@@ -5,3 +5,5 @@ node_modules
 next-env.d.ts
 tsconfig.tsbuildinfo
 .vercel
+AGENTS.md
+CLAUDE.md
