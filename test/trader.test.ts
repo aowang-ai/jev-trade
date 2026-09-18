@@ -1,37 +1,47 @@
 import { expect, test } from "bun:test";
 import { leverageRungs, liveIntent, parseLeverage, planQuote, quoteAction } from "../src/plan";
 
-test("open long buys and open short sells", () => {
+test("open long buys and open short sells, resting post-only", () => {
   expect(quoteAction("open", "long")).toBe("buy");
   expect(quoteAction("open", "short")).toBe("sell");
   expect(planQuote({ intent: "open", bias: "long", positionSz: -2, quoteSz: 0.01 })).toEqual({
-    side: "buy", size: 0.01, reduceOnly: false,
+    side: "buy", size: 0.01, reduceOnly: false, taker: false,
   });
   expect(planQuote({ intent: "open", bias: "short", positionSz: 2, quoteSz: 0.01 })).toEqual({
-    side: "sell", size: 0.01, reduceOnly: false,
+    side: "sell", size: 0.01, reduceOnly: false, taker: false,
   });
 });
 
-test("close flattens the live book and skips when flat", () => {
+test("close flattens the live book as a taker and skips when flat", () => {
   expect(planQuote({ intent: "close", bias: "long", positionSz: 0.08, quoteSz: 0.01 })).toEqual({
-    side: "sell", size: 0.08, reduceOnly: true,
+    side: "sell", size: 0.08, reduceOnly: true, taker: true,
   });
   expect(planQuote({ intent: "close", bias: "short", positionSz: -0.08, quoteSz: 0.01 })).toEqual({
-    side: "buy", size: 0.08, reduceOnly: true,
+    side: "buy", size: 0.08, reduceOnly: true, taker: true,
   });
   expect(planQuote({ intent: "close", bias: "long", positionSz: -0.08, quoteSz: 0.01 })).toEqual({
-    side: "buy", size: 0.08, reduceOnly: true,
+    side: "buy", size: 0.08, reduceOnly: true, taker: true,
   });
   expect(planQuote({ intent: "close", bias: "short", positionSz: 0.08, quoteSz: 0.01 })).toEqual({
-    side: "sell", size: 0.08, reduceOnly: true,
+    side: "sell", size: 0.08, reduceOnly: true, taker: true,
   });
   expect(planQuote({ intent: "close", bias: "long", positionSz: 0, quoteSz: 0.01 })).toBe(null);
 });
 
-test("liveIntent cannot close a flat book", () => {
-  expect(liveIntent("flat", "close")).toBe("open");
+test("hold sends nothing, whatever the bias or position", () => {
+  expect(quoteAction("hold", "long")).toBe("hold");
+  expect(quoteAction("hold", "short")).toBe("hold");
+  expect(planQuote({ intent: "hold", bias: "long", positionSz: 0, quoteSz: 0.01 })).toBe(null);
+  expect(planQuote({ intent: "hold", bias: "short", positionSz: 0.08, quoteSz: 0.01 })).toBe(null);
+  expect(planQuote({ intent: "hold", bias: "long", positionSz: -0.08, quoteSz: 0.01 })).toBe(null);
+});
+
+test("liveIntent cannot close a flat book and stands down instead", () => {
+  expect(liveIntent("flat", "close")).toBe("hold");
+  expect(liveIntent("flat", "hold")).toBe("hold");
   expect(liveIntent("flat", "open")).toBe("open");
   expect(liveIntent("long", "close")).toBe("close");
+  expect(liveIntent("long", "hold")).toBe("hold");
   expect(liveIntent("short", "open")).toBe("open");
 });
 

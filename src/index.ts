@@ -89,8 +89,11 @@ function onEvent(coin: string) {
     if (e.decision && !e.decision.late) {
       const d = e.decision;
       const q = e.quote;
-      const call = d.intent && d.bias ? `${d.intent} ${d.bias}${d.leverage != null ? ` ${d.leverage}x` : ""}` : d.action;
-      const quote = !q ? " NO QUOTE" : ` ${q.side.toUpperCase()} ${q.size} @ ${q.price}${q.reduceOnly ? " reduce" : ""}${q.unchanged ? " hold" : q.status === "sim" ? " (sim)" : ` ${q.status}`}`;
+      // A hold applies neither bias nor leverage, and an exit skips the leverage write.
+      const lev = d.intent === "open" && d.leverage != null ? ` ${d.leverage}x` : "";
+      const call = d.intent === "hold" ? "hold" : d.intent && d.bias ? `${d.intent} ${d.bias}${lev}` : d.action;
+      const order = q && ` ${q.side.toUpperCase()} ${q.size} @ ${q.price}${q.taker ? " cross" : ""}${q.reduceOnly ? " reduce" : ""}${q.unchanged ? " unchanged" : q.status === "sim" ? " (sim)" : ` ${q.status}`}`;
+      const quote = order || (d.intent === "hold" ? " NO ORDER" : "");
       console.log(`${coin} #${e.block} ${e.mid} ${call} ${d.latencyMs}ms${quote} pnl $${e.totals.pnlUsd}${t ? ` loop ${t.loopMs}ms` : ""}`);
     }
   };

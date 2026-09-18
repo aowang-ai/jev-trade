@@ -62,6 +62,8 @@ export function fmtCall(d: {
   leverage?: number | null;
 } | null | undefined): string {
   if (!d) return "";
+  // A hold sends no order, so the leverage and bias it came with never got applied.
+  if (d.intent === "hold") return "HOLD";
   let word = "";
   if (d.intent && d.bias) word = `${d.intent} ${d.bias}`.toUpperCase();
   else if (d.action && d.action !== "hold") word = d.action.toUpperCase();

@@ -27,6 +27,20 @@ export function quotePrice(side: Side, book: Book, szDecimals: number, inside = 
   return alignPrice(raw, szDecimals);
 }
 
+/**
+ * Crossing limit for an Ioc exit. Walks `slippageBps` past the far touch so the
+ * order clears the visible book instead of resting on it. Rounds away from the
+ * touch so tick alignment can never pull the price back inside the spread.
+ */
+export function takerPrice(side: Side, book: Book, szDecimals: number, slippageBps = config.closeSlippageBps): number {
+  const tick = priceTick(szDecimals);
+  const decimals = Math.max(0, 6 - szDecimals);
+  const bps = Math.max(0, slippageBps) / 10_000;
+  const raw = side === "buy" ? book.ask * (1 + bps) : book.bid * (1 - bps);
+  const away = side === "buy" ? Math.ceil(raw / tick) : Math.floor(raw / tick);
+  return Number(Math.max(tick, away * tick).toFixed(decimals));
+}
+
 export function bookFromLevels(block: number, bids: HlLevel[], asks: HlLevel[]): Book | null {
   const bidLv: [number, number][] = [];
   const askLv: [number, number][] = [];

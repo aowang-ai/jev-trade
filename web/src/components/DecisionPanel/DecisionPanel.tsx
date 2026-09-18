@@ -41,21 +41,25 @@ function BarRow({ label, labelColor, active, value, fill, pct }: BarRowProps) {
 export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
   const decision = latest?.decision ?? null;
   const late = decision ? decision.late : true;
+  const held = decision?.intent === "hold";
   const chosen =
-    decision && !decision.late && decision.action !== "hold"
+    decision && !decision.late && !held && decision.action !== "hold"
       ? (decision.bias ?? decision.action)
       : null;
 
   const probs = decision?.probabilities ?? { buy: 0, sell: 0, hold: 0 };
-  const decided = decision !== null && !late && chosen !== null;
+  // A hold is a real answer, so its bars stay readable instead of greying out.
+  const decided = decision !== null && !late && (chosen !== null || held);
   const pctOf = (p: number | undefined) => (decided ? fmtPct(p ?? 0) : "-");
 
   const headline = decided ? fmtCall(decision) || "LATE" : "LATE";
-  const headlineColor = chosen
-    ? (decision?.bias ?? decision?.action) === "short" || decision?.action === "sell"
-      ? "var(--sell-ink)"
-      : "var(--buy-ink)"
-    : "var(--late-ink)";
+  const headlineColor = held
+    ? "var(--ink-2)"
+    : chosen
+      ? (decision?.bias ?? decision?.action) === "short" || decision?.action === "sell"
+        ? "var(--sell-ink)"
+        : "var(--buy-ink)"
+      : "var(--late-ink)";
 
   const pos = latest?.position;
   const coin = meta?.coin ?? "BTC";
@@ -81,17 +85,17 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
             <BarRow
               label="long"
               labelColor="var(--buy-ink)"
-              active={decision?.bias === "long"}
+              active={!held && decision?.bias === "long"}
               value={probs.long ?? probs.buy}
-              fill={decision?.bias === "long" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
+              fill={!held && decision?.bias === "long" ? "var(--buy-bar)" : "var(--buy-bar-dim)"}
               pct={pctOf(probs.long ?? probs.buy)}
             />
             <BarRow
               label="short"
               labelColor="var(--sell-ink)"
-              active={decision?.bias === "short"}
+              active={!held && decision?.bias === "short"}
               value={probs.short ?? probs.sell}
-              fill={decision?.bias === "short" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
+              fill={!held && decision?.bias === "short" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
               pct={pctOf(probs.short ?? probs.sell)}
             />
             <BarRow
@@ -109,6 +113,14 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
               value={probs.close ?? 0}
               fill={decision?.intent === "close" ? "var(--sell-bar)" : "var(--sell-bar-dim)"}
               pct={pctOf(probs.close)}
+            />
+            <BarRow
+              label="hold"
+              labelColor="var(--ink)"
+              active={held}
+              value={probs.hold ?? 0}
+              fill={held ? "var(--ink-2)" : "var(--hold-cell)"}
+              pct={pctOf(probs.hold)}
             />
           </div>
         </div>

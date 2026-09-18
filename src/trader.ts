@@ -2,7 +2,7 @@ import { config } from "./config";
 import { bpsBetween, snapshotIndicators, venueFeatures } from "./indicators";
 import type { Market } from "./market";
 import type { Model, ModelDecision, TradeState } from "./model";
-import { planQuote } from "./plan";
+import { planQuote, type QuotePlan } from "./plan";
 import { aggregateFills, emptySummary, takeLiveFills, takeSimFills, type Resting, type TradeFeed } from "./trades";
 import type { BlockEvent, Book, Fill, PricePoint, Quote, Side, Timing, Totals } from "./types";
 
@@ -75,6 +75,7 @@ export class Trader {
       });
       this.emit(block, book, decision, null, false, { readMs: Math.round(readMs), loopMs: Math.round(performance.now() - t0) });
       if (plan) this.enqueueQuote(block, decision, plan, book);
+      else this.enqueueStandDown();
     } catch (e) {
       console.error(`tick ${block}:`, (e as Error).message);
     } finally {
@@ -82,21 +83,32 @@ export class Trader {
     }
   }
 
-  private enqueueQuote(
-    block: number,
-    decision: ModelDecision,
-    plan: NonNullable<ReturnType<typeof planQuote>>,
-    book: Book,
-  ) {
+  private enqueueQuote(block: number, decision: ModelDecision, plan: QuotePlan, book: Book) {
     const seq = ++this.sendSeq;
     this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
       if (seq !== this.sendSeq) return;
-      await this.market.setLeverage(decision.leverage);
-      if (seq !== this.sendSeq) return;
+      // An exit skips the leverage write: nothing about it depends on margin, and
+      // the extra round trip is pure delay on the one order that has to land now.
+      if (!plan.taker) {
+        await this.market.setLeverage(decision.leverage);
+        if (seq !== this.sendSeq) return;
+      }
       const cancel = [...this.orders.keys()].filter((id) => id > 0);
-      const quote = await this.market.send(plan.side, plan.size, book, cancel, plan.reduceOnly);
+      const quote = await this.market.send(plan.side, plan.size, book, cancel, plan.reduceOnly, plan.taker);
       if (seq !== this.sendSeq) return;
       this.applyPosted(block, quote);
+    });
+  }
+
+  /** Jev held. Pull the standing quote so an order it no longer wants cannot get hit. */
+  private enqueueStandDown() {
+    if (!this.orders.size) return;
+    const seq = ++this.sendSeq;
+    this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
+      if (seq !== this.sendSeq) return;
+      await this.market.cancelResting();
+      if (seq !== this.sendSeq) return;
+      this.orders.clear();
     });
   }
 
@@ -105,7 +117,11 @@ export class Trader {
     if (e) e.quote = quote;
     if (!quote.unchanged) this.totals.quotes++;
     if (quote.status === "reverted") this.totals.reverted++;
-    if (quote.status === "sim") {
+    if (quote.taker) {
+      // An Ioc never rests. Live fills arrive on userFills; a dry run fills here.
+      this.orders.clear();
+      if (quote.status === "sim") this.simTakerFill(block, quote);
+    } else if (quote.status === "sim") {
       this.orders.clear();
       this.orders.set(--this.simId, { side: quote.side, price: quote.price, size: quote.size, block });
     } else if (quote.status === "placed" && quote.orderId != null) {
@@ -113,6 +129,21 @@ export class Trader {
       this.orders.set(quote.orderId, { side: quote.side, price: quote.price, size: quote.size, block });
     }
     this.onQuote(block, quote);
+  }
+
+  /** A dry-run exit crosses the touch, so it fills now rather than waiting on a print. */
+  private simTakerFill(block: number, quote: Quote) {
+    const fill: Fill = {
+      side: quote.side,
+      size: quote.size,
+      price: quote.price,
+      txHash: null,
+      orderId: --this.simId,
+      simulated: true,
+      dir: quote.reduceOnly ? "close" : "open",
+    };
+    this.applyFill(fill);
+    this.recordFill(block, fill);
   }
 
   private harvest() {
@@ -125,13 +156,14 @@ export class Trader {
       this.applyFill(f);
       byBlock.set(f.block, [...(byBlock.get(f.block) ?? []), f]);
     }
-    for (const [block, fs] of byBlock) {
-      const fill = aggregateFills(fs);
-      const e = this.history.find((h) => h.block === block);
-      if (e) e.fill = fill;
-      this.onFill(block, fill);
-    }
+    for (const [block, fs] of byBlock) this.recordFill(block, aggregateFills(fs));
     this.market.refresh().catch(() => {});
+  }
+
+  private recordFill(block: number, fill: Fill) {
+    const e = this.history.find((h) => h.block === block);
+    if (e) e.fill = fill;
+    this.onFill(block, fill);
   }
 
   private restingSz(side: Side) {

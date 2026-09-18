@@ -2,7 +2,9 @@
 
 Live demo: [jev-trade.com](https://www.jev-trade.com/)
 
-Jev quotes Hyperliquid every tick. Five isolated sleeves (BTC, ETH, SOL, DOGE, BNB). Each sleeve has its own wallet and Jev call. The bot posts a post-only Alo quote one tick inside the touch. Fills happen when a taker hits it. Position and PnL come from Hyperliquid.
+Jev reads Hyperliquid every tick. Five isolated sleeves (BTC, ETH, SOL, DOGE, BNB). Each sleeve has its own wallet and Jev call. Every tick Jev picks long or short, then open, close, or hold.
+
+An entry is a post-only Alo quote one tick inside the touch, so it earns the maker side and fills when a taker hits it. An exit is an Ioc that crosses the touch and fills on the spot: a resting exit only fills when the market moves your way, which caps winners at the spread and lets losers run. A hold sends no order and pulls any resting quote, so the book never carries a bid Jev no longer wants. Position and PnL come from Hyperliquid.
 
 This is a real trading bot. A live key on mainnet or testnet will send real orders. Start with a dry run.
 
@@ -91,6 +93,7 @@ See [`.env.example`](.env.example). The ones that change behavior:
 | `DRY_RUN` | `false` | `true` simulates every sleeve |
 | `TICK_MS` | `500` | Decision + requote cadence |
 | `QUOTE_USD` | `40` | Quote notional per tick |
+| `CLOSE_SLIPPAGE_BPS` | `5` | How far an Ioc exit crosses the touch |
 | `PORT` | `3000` | Bot SSE |
 
 ## Endpoints

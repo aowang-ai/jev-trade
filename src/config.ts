@@ -50,6 +50,8 @@ export const config = {
   /** Target notional of one post-only quote. */
   quoteUsd: Number(env("QUOTE_USD", "40")),
   quoteInsideTicks: Number(env("QUOTE_INSIDE_TICKS", "1")),
+  /** How far an Ioc exit crosses the touch so it fills on the spot. */
+  closeSlippageBps: Number(env("CLOSE_SLIPPAGE_BPS", "5")),
   horizonBlocks: Number(env("HORIZON_BLOCKS", "100")),
   model: env("MODEL", "mock") as "mock" | "jev",
   /** typesafe = official TypeSafe API. gateway = Vercel AI Gateway. */

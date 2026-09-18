@@ -480,11 +480,13 @@ export default function FlowChart({
   const word = late ? "LATE" : fmtCall(d) || "HOLD";
   const wordColor = late
     ? "var(--late-ink)"
-    : (d?.bias ?? d?.action) === "short" || d?.action === "sell"
-      ? "var(--sell-ink)"
-      : d?.action === "buy" || d?.bias === "long"
-        ? "var(--buy-ink)"
-        : "var(--ink)";
+    : d?.intent === "hold" || d?.action === "hold"
+      ? "var(--ink-2)"
+      : (d?.bias ?? d?.action) === "short" || d?.action === "sell"
+        ? "var(--sell-ink)"
+        : d?.action === "buy" || d?.bias === "long"
+          ? "var(--buy-ink)"
+          : "var(--ink)";
   const allTime = scale === "ALL" || (scale == null && view == null);
 
   return (

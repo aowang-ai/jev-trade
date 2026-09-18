@@ -2,7 +2,8 @@
 export type Action = "buy" | "sell" | "hold";
 export type Side = "buy" | "sell";
 export type Bias = "long" | "short";
-export type Intent = "open" | "close";
+/** `hold` posts nothing and pulls any resting quote. */
+export type Intent = "open" | "close" | "hold";
 
 export interface Book {
   block: number;
@@ -16,7 +17,7 @@ export interface Book {
   depthBps: { [band: string]: { bid: number; ask: number } };
 }
 
-/** This tick's post-only limit order. */
+/** This tick's order. Entries are post-only limits, exits are Ioc takers. */
 export interface Quote {
   side: Side;
   price: number;
@@ -28,6 +29,8 @@ export interface Quote {
   capped: boolean;
   reduceOnly?: boolean;
   unchanged?: boolean;
+  /** Ioc order that crossed the touch instead of resting on it. */
+  taker?: boolean;
 }
 
 /** A taker hit one of our resting orders. */

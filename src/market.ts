@@ -3,12 +3,14 @@ import { formatPrice, formatSize, SymbolConverter } from "@nktkas/hyperliquid/ut
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { config } from "./config";
 import { accountFromClearinghouse, fillDir, FillPnlBook, type ClearinghouseLike, type FillPnlLike, type VenueAccount } from "./account";
-import { quotePrice } from "./book";
+import { quotePrice, takerPrice } from "./book";
 import type { Feed } from "./feed";
 import { sameCoin, type SleeveConfig } from "./sleeves";
 import type { Book, Fill, Quote, Side } from "./types";
 
 type Ex = ExchangeClient;
+
+type QuoteBase = Required<Pick<Quote, "side" | "reduceOnly" | "capped" | "taker">>;
 
 /** Hyperliquid perp: Alo post-only quotes, modify when the side stays put. */
 export class Market {
@@ -75,11 +77,7 @@ export class Market {
       this.feed.onUserPnl = (fill) => this.noteFill(fill);
       this.feed.watchUser(this.wallet.address);
       this.feed.onGone = (oid) => {
-        if (this.lastOid === oid) {
-          this.lastOid = null;
-          this.lastSide = null;
-          this.lastSize = 0;
-        }
+        if (this.lastOid === oid) this.forgetResting();
       };
       await this.clearOpen();
     }
@@ -167,19 +165,76 @@ export class Market {
     }
   }
 
-  async send(side: Side, sizeSz: number, book: Book, cancel: number[], reduceOnly = false): Promise<Quote> {
-    const price = quotePrice(side, book, this.szDecimals);
+  /** Entries rest post-only. Exits cross as Ioc so they do not wait on a taker. */
+  async send(side: Side, sizeSz: number, book: Book, cancel: number[], reduceOnly = false, taker = false): Promise<Quote> {
     const size = lot(sizeSz, this.szDecimals);
-    const base = { side, reduceOnly, capped: false as const };
+    const base: QuoteBase = { side, reduceOnly, capped: false, taker };
     if (size <= 0) {
       return { ...base, price: 0, size: 0, txHash: null, cancel, status: "reverted", orderId: null };
     }
-    let px = Number(formatPrice(price, this.szDecimals));
-    if (side === "sell" && px <= book.bid) px = Number(formatPrice(book.ask, this.szDecimals));
-    if (side === "buy" && px >= book.ask) px = Number(formatPrice(book.bid, this.szDecimals));
+    const px = taker
+      ? Number(formatPrice(takerPrice(side, book, this.szDecimals), this.szDecimals))
+      : this.restingPx(side, book);
     if (!this.ex) {
       return { ...base, price: px, size, txHash: null, cancel, status: "sim", orderId: null };
     }
+    return taker ? this.sendTaker(size, px, base) : this.sendMaker(size, px, cancel, base);
+  }
+
+  /** Post-only price, clamped so it can never cross and get rejected. */
+  private restingPx(side: Side, book: Book): number {
+    let px = Number(formatPrice(quotePrice(side, book, this.szDecimals), this.szDecimals));
+    if (side === "sell" && px <= book.bid) px = Number(formatPrice(book.ask, this.szDecimals));
+    if (side === "buy" && px >= book.ask) px = Number(formatPrice(book.bid, this.szDecimals));
+    return px;
+  }
+
+  private limitOrder(side: Side, size: number, px: number, reduceOnly: boolean, tif: "Alo" | "Ioc") {
+    return {
+      a: this.assetId,
+      b: side === "buy",
+      p: formatPrice(px, this.szDecimals),
+      s: formatSize(size, this.szDecimals),
+      r: reduceOnly,
+      t: { limit: { tif } },
+    };
+  }
+
+  private async sendTaker(size: number, px: number, base: QuoteBase): Promise<Quote> {
+    // The standing entry sits on the far side of an exit. Pull it before crossing.
+    const open = this.lastOid;
+    const cancel = open != null ? [open] : [];
+    if (open != null) {
+      await this.ex!.cancel({ cancels: [{ a: this.assetId, o: open }] }).catch(() => {});
+      this.forgetResting();
+    }
+    try {
+      const res = await this.ex!.order({
+        orders: [this.limitOrder(base.side, size, px, base.reduceOnly, "Ioc")],
+        grouping: "na",
+      });
+      const st = res.response.data.statuses[0];
+      if (st && typeof st === "object" && "filled" in st) {
+        return {
+          ...base,
+          price: Number(st.filled.avgPx) || px,
+          size: Number(st.filled.totalSz) || size,
+          txHash: null,
+          cancel,
+          status: "placed",
+          orderId: st.filled.oid,
+        };
+      }
+      // An unfilled Ioc leaves nothing behind. Next tick decides again.
+      return { ...base, price: px, size, txHash: null, cancel, status: "reverted", orderId: null };
+    } catch (e) {
+      this.warn("exit", e);
+      return { ...base, price: px, size, txHash: null, cancel, status: "reverted", orderId: null };
+    }
+  }
+
+  private async sendMaker(size: number, px: number, cancel: number[], base: QuoteBase): Promise<Quote> {
+    const { side, reduceOnly } = base;
     if (
       this.lastOid != null &&
       this.lastSide === side &&
@@ -190,18 +245,10 @@ export class Market {
       return { ...base, price: px, size, txHash: null, cancel: [], status: "placed", orderId: this.lastOid, unchanged: true };
     }
 
-    const order = {
-      a: this.assetId,
-      b: side === "buy",
-      p: formatPrice(px, this.szDecimals),
-      s: formatSize(size, this.szDecimals),
-      r: reduceOnly,
-      t: { limit: { tif: "Alo" as const } },
-    };
-
+    const order = this.limitOrder(side, size, px, reduceOnly, "Alo");
     try {
       if (this.lastOid != null && this.lastSide === side && this.lastReduce === reduceOnly) {
-        await this.ex.modify({ oid: this.lastOid, order });
+        await this.ex!.modify({ oid: this.lastOid, order });
         this.lastPrice = px;
         this.lastSize = size;
         return { ...base, price: px, size, txHash: null, cancel: [], status: "placed", orderId: this.lastOid };
@@ -209,11 +256,11 @@ export class Market {
 
       const oids = this.lastOid != null ? [this.lastOid] : cancel.filter((id) => id > 0);
       if (oids.length) {
-        await this.ex.cancel({ cancels: oids.map((o) => ({ a: this.assetId, o })) }).catch(() => {});
+        await this.ex!.cancel({ cancels: oids.map((o) => ({ a: this.assetId, o })) }).catch(() => {});
         this.lastOid = null;
       }
 
-      const res = await this.ex.order({ orders: [order], grouping: "na" });
+      const res = await this.ex!.order({ orders: [order], grouping: "na" });
       const st = res.response.data.statuses[0];
       if (st && typeof st === "object" && "resting" in st) {
         this.lastOid = st.resting.oid;
@@ -224,19 +271,38 @@ export class Market {
         return { ...base, price: px, size, txHash: null, cancel: oids, status: "placed", orderId: this.lastOid };
       }
       if (st && typeof st === "object" && "filled" in st) {
-        this.lastOid = null;
-        this.lastSide = null;
+        this.forgetResting();
         return { ...base, price: px, size, txHash: null, cancel: oids, status: "placed", orderId: st.filled.oid };
       }
-      this.lastOid = null;
-      this.lastSide = null;
+      this.forgetResting();
       return { ...base, price: px, size, txHash: null, cancel: oids, status: "reverted", orderId: null };
     } catch (e) {
-      const msg = e instanceof ApiRequestError ? e.message : (e as Error).message;
-      if (/rate.?limit/i.test(msg)) console.warn(`${this.label}: hyperliquid rate limited; standing quote kept`);
-      else console.warn(`${this.label} quote: ${msg.slice(0, 180)}`);
+      this.warn("quote", e);
       return { ...base, price: px, size, txHash: null, cancel, status: "reverted", orderId: this.lastOid };
     }
+  }
+
+  /** Pull the standing quote. A resting order Jev no longer wants still gets hit. */
+  async cancelResting(): Promise<number[]> {
+    const oid = this.lastOid;
+    if (!this.ex || oid == null) return [];
+    await this.ex.cancel({ cancels: [{ a: this.assetId, o: oid }] }).catch(() => {});
+    this.forgetResting();
+    return [oid];
+  }
+
+  private forgetResting() {
+    this.lastOid = null;
+    this.lastSide = null;
+    this.lastPrice = 0;
+    this.lastSize = 0;
+    this.lastReduce = false;
+  }
+
+  private warn(what: string, e: unknown) {
+    const msg = e instanceof ApiRequestError ? e.message : (e as Error).message;
+    if (/rate.?limit/i.test(msg)) console.warn(`${this.label}: hyperliquid rate limited; ${what} skipped`);
+    else console.warn(`${this.label} ${what}: ${msg.slice(0, 180)}`);
   }
 
   private async loadMaxLeverage() {

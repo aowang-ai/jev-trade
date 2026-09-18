@@ -149,9 +149,15 @@
   color: var(--late);
 }
 
+.kindHold .word,
+.kindHold .detail {
+  color: var(--ink-2);
+}
+
 .kindBuy .detail.muted,
 .kindSell .detail.muted,
-.kindLate .detail.muted {
+.kindLate .detail.muted,
+.kindHold .detail.muted {
   color: var(--muted);
 }
 
@@ -167,6 +173,10 @@
   background: transparent;
 }
 
+.kindHold {
+  background: transparent;
+}
+
 .newest.kindBuy {
   background: rgba(0, 170, 0, 0.12);
 }
@@ -177,6 +187,10 @@
 
 .newest.kindLate {
   background: var(--panel-2);
+}
+
+.newest.kindHold {
+  background: var(--hold-cell);
 }
 
 @media (max-width: 899.98px) {

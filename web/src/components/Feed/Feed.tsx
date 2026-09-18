@@ -8,12 +8,13 @@ import styles from "./Feed.module.css";
 const ROW_H = 26;
 const MAX_ROWS = 40;
 
-type Kind = "buy" | "sell" | "late";
+type Kind = "buy" | "sell" | "hold" | "late";
 type Filter = "live" | "fills";
 
 function kindOf(event: BlockEvent): Kind {
   const d = event.decision;
   if (!d || d.late) return "late";
+  if (d.intent === "hold" || d.action === "hold") return "hold";
   if (d.bias === "short" || d.action === "sell") return "sell";
   if (d.bias === "long" || d.action === "buy") return "buy";
   return "late";
@@ -29,6 +30,7 @@ function fmtSize(size: number): string {
 const KIND_CLASS: Record<Kind, string> = {
   buy: styles.kindBuy,
   sell: styles.kindSell,
+  hold: styles.kindHold,
   late: styles.kindLate,
 };
 
@@ -36,6 +38,7 @@ function wordOf(event: BlockEvent, kind: Kind): string {
   const d = event.decision;
   if (event.fill && event.fill.size > 0) return "FILL";
   if (kind === "late") return "LATE";
+  if (kind === "hold") return "HOLD";
   if (d?.intent === "close") return "CLOSE";
   if (d?.intent === "open") return "OPEN";
   if (d?.action === "buy") return "BUY";
@@ -122,11 +125,14 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
             if (fill && fill.size > 0) {
               detail = `${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
             } else if (decided && quote) {
-              const word = quote.side === "buy" ? "bid" : "ask";
-              const lev = decision?.leverage != null ? ` ${decision.leverage}x` : "";
-              const bias = decision?.bias ? ` ${decision.bias}` : "";
+              const word = quote.taker ? "cross" : quote.side === "buy" ? "bid" : "ask";
+              const lev = quote.taker || decision?.leverage == null ? "" : ` ${decision.leverage}x`;
+              const bias = quote.taker || !decision?.bias ? "" : ` ${decision.bias}`;
               detail = `${word} ${fmtSize(quote.size)} @ ${fmtPrice(quote.price)}${bias}${lev}${quote.reduceOnly ? " reduce" : ""}`;
               detailMuted = quote.status === "reverted";
+            } else if (decided && kind === "hold") {
+              detail = event.position.side === "flat" ? "flat, no order" : "position held";
+              detailMuted = true;
             } else if (decided && decision?.intent === "close" && event.position.side === "flat") {
               detail = "already flat";
               detailMuted = true;

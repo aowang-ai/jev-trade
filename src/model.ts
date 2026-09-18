@@ -103,6 +103,7 @@ function questions(state: TradeState) {
     levCriteria[String(n)] = `${n}x cross leverage on ${asset}. Higher leverage uses less margin for the same quote and raises liquidation risk.`;
   }
   const ctx = `You trade only ${asset} (${state.market}) on Hyperliquid. position is the live book and PnL (unrealizedUsd, realizedUsd, feesUsd, pnlUsd, pnlPct, liquidationPx). indicators are from 1m closes (sma20, sma50, ema20, rsi14, vol20Bps, rangePos20, midVsSma20Bps). asset is mark/oracle/fundingBps/premiumBps/openInterest/dayChangeBps/dayNtlVlmUsd. trades and book are the live tape. recentFills are this wallet's fills.`;
+  const cost = `An entry rests post-only and pays the maker fee. An exit crosses the touch and pays the taker fee. A full round trip costs roughly the maker fee plus the taker fee on top of the ${state.spreadBps} bps spread, so a move you cannot name in bps is not worth trading.`;
   const bias = {
     type: "choice",
     instructions: {
@@ -121,78 +122,111 @@ function questions(state: TradeState) {
     instructions: {
       question: `What cross leverage should the ${asset} account use this tick?`,
       goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x. Read liquidationPx and equity before sizing risk.`,
-      timing: "Leverage is updated on the wallet before the quote is posted.",
+      timing: "Leverage is updated on the wallet before the order is sent. It is ignored on a hold.",
       inputs: `${ctx} Allowed rungs: ${rungs.join(" ")}.`,
     },
     criteria: levCriteria,
   };
+  const money = `equity=${pos.equity} withdrawable=${pos.withdrawable} notional=${pos.notionalUsd}`;
   if (pos.side === "flat") {
-    return { bias, leverage };
+    return {
+      bias,
+      intent: {
+        type: "choice",
+        instructions: {
+          question: `Take a ${asset} position this tick, or stay flat?`,
+          goal: `You are flat, so there is nothing to close. Open starts a position in the long/short you picked. Hold stays flat and puts no order on the book. Holding is free and always available; most ticks do not carry an edge worth paying for.`,
+          timing: "An entry is a post-only limit one tick inside the touch. It fills only when a taker hits it, which means it fills when the tape is running against it.",
+          inputs: `${ctx} ${cost} Current: ${stance}. ${money}.`,
+        },
+        criteria: {
+          open: `Open ${asset} on the long/short you picked. Only when the expected move over \`horizonTicks\` clears the spread and the round trip fee.`,
+          hold: `Stay flat. No order is sent. Pick this when the tape is noise, the spread is wide against the move you expect, the book is thin, or the signals disagree.`,
+        },
+      },
+      leverage,
+    };
   }
   return {
     bias,
     intent: {
       type: "choice",
       instructions: {
-        question: `Add to the ${asset} position or flatten it this tick?`,
-        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is.",
-        timing: "The quote is a post-only limit one tick inside the touch. It fills only if a taker hits it.",
-        inputs: `${ctx} Current: ${stance}. equity=${pos.equity} withdrawable=${pos.withdrawable} notional=${pos.notionalUsd}.`,
+        question: `Add to the ${asset} position, flatten it, or leave it alone this tick?`,
+        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is. Hold sends nothing and leaves the position untouched. Doing nothing is a real answer, not a fallback.",
+        timing: "An add rests post-only and fills only if a taker hits it. A close crosses the touch and fills now at the taker fee. A hold also pulls any resting add, so the book carries no order you did not ask for.",
+        inputs: `${ctx} ${cost} Current: ${stance}. ${money}.`,
       },
       criteria: {
-        open: `Open or add ${asset} on the long/short you picked.`,
-        close: `Flatten the live ${asset} position.`,
+        open: `Add to ${asset} on the long/short you picked. Only when the case is stronger than when the position was opened.`,
+        close: `Flatten the live ${asset} position now, paying the taker fee to be out. Pick this when the reason for the position is gone, not merely because it is offside.`,
+        hold: `Leave the position exactly as it is and send nothing. Pick this when the position still makes sense and adding would only raise the fee bill and the risk.`,
       },
     },
     leverage,
   };
 }
 
-function pack(
-  intent: Intent,
-  bias: Bias,
-  leverage: number,
-  longP: number,
-  shortP: number,
-  openP: number,
-  closeP: number,
-  latencyMs: number,
-  inputTokens: number,
-): ModelDecision {
-  const action = quoteAction(intent, bias);
-  const buy = action === "buy" ? Math.max(longP, openP) : Math.max(shortP, closeP);
-  const sell = 1 - buy;
+interface Packed {
+  intent: Intent;
+  bias: Bias;
+  leverage: number;
+  longP: number;
+  shortP: number;
+  openP: number;
+  closeP: number;
+  holdP: number;
+  latencyMs: number;
+  inputTokens: number;
+}
+
+function pack(o: Packed): ModelDecision {
+  const action = quoteAction(o.intent, o.bias);
+  // long/short and open/close/hold are each a distribution. buy/sell are the legacy
+  // pair: the mass behind the order actually being sent, discounted by the hold mass.
+  const conviction = action === "buy"
+    ? Math.max(o.longP, o.openP)
+    : action === "sell"
+      ? Math.max(o.shortP, o.closeP)
+      : 0;
+  const sized = conviction * (1 - o.holdP);
   return {
     action,
-    intent,
-    bias,
-    leverage,
+    intent: o.intent,
+    bias: o.bias,
+    leverage: o.leverage,
     probabilities: {
-      buy,
-      sell,
-      hold: 0,
-      long: longP,
-      short: shortP,
-      open: openP,
-      close: closeP,
+      buy: action === "buy" ? sized : 0,
+      sell: action === "sell" ? sized : 0,
+      hold: o.holdP,
+      long: o.longP,
+      short: o.shortP,
+      open: o.openP,
+      close: o.closeP,
     },
-    upIn10: longP,
-    latencyMs,
-    inputTokens,
+    upIn10: o.longP,
+    latencyMs: o.latencyMs,
+    inputTokens: o.inputTokens,
   };
 }
 
-function pick<T extends string>(raw: unknown, a: T, b: T): T {
-  return raw === b ? b : a;
+function pick<T extends string>(raw: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(raw as T) ? (raw as T) : fallback;
 }
 
-function pairProbs(answer: { choice?: string; probabilities?: Record<string, number> } | undefined, a: string, b: string): [number, number] {
+/** Normalize a choice answer over `keys`. Missing probabilities fall back to the pick. */
+function choiceProbs(answer: ChoiceAnswer | undefined, keys: readonly string[]): Record<string, number> {
   const p = answer?.probabilities ?? {};
-  let left = p[a] ?? (answer?.choice === a ? 1 : 0);
-  let right = p[b] ?? (answer?.choice === b ? 1 : 0);
-  const sum = left + right;
-  if (sum <= 0) return answer?.choice === b ? [0, 1] : [1, 0];
-  return [left / sum, right / sum];
+  const raw = keys.map((k) => Math.max(0, p[k] ?? (answer?.choice === k ? 1 : 0)));
+  const sum = raw.reduce((a, b) => a + b, 0);
+  const out: Record<string, number> = {};
+  if (sum <= 0) {
+    const at = keys.indexOf(answer?.choice ?? "");
+    keys.forEach((k, i) => (out[k] = i === (at >= 0 ? at : 0) ? 1 : 0));
+    return out;
+  }
+  keys.forEach((k, i) => (out[k] = raw[i]! / sum));
+  return out;
 }
 
 type ChoiceAnswer = { choice?: string; probabilities?: Record<string, number> };
@@ -237,19 +271,30 @@ export class JevModel implements Model {
   async decide(state: TradeState): Promise<ModelDecision> {
     const t0 = performance.now();
     const r = await callJev(state);
-    const bias = pick(r.answers.bias?.choice, "long", "short");
-    const picked = pick(r.answers.intent?.choice, "open", "close");
-    const intent = liveIntent(state.position.side, picked);
-    const [longP, shortP] = pairProbs(r.answers.bias, "long", "short");
-    const [openP, closeP] = state.position.side === "flat"
-      ? [1, 0]
-      : pairProbs(r.answers.intent, "open", "close");
+    const flat = state.position.side === "flat";
+    const bias = pick(r.answers.bias?.choice, ["long", "short"] as const, "long");
+    // Standing down is the safe read of a missing or unusable answer.
+    const choices = flat ? (["open", "hold"] as const) : (["open", "close", "hold"] as const);
+    const intent = liveIntent(state.position.side, pick(r.answers.intent?.choice, choices, "hold"));
+    const dir = choiceProbs(r.answers.bias, ["long", "short"]);
+    const act = choiceProbs(r.answers.intent, choices);
     const leverage = parseLeverage(r.answers.leverage?.choice, state.maxLeverage, state.position.leverage ?? 1);
-    return pack(intent, bias, leverage, longP, shortP, openP, closeP, performance.now() - t0, r.inputTokens);
+    return pack({
+      intent,
+      bias,
+      leverage,
+      longP: dir.long!,
+      shortP: dir.short!,
+      openP: act.open!,
+      closeP: act.close ?? 0,
+      holdP: act.hold!,
+      latencyMs: performance.now() - t0,
+      inputTokens: r.inputTokens,
+    });
   }
 }
 
-/** Deterministic stand-in: momentum + imbalance. Jev-shaped open/close/long/short/leverage. */
+/** Deterministic stand-in: momentum + imbalance. Jev-shaped open/close/hold/long/short/leverage. */
 export class MockModel implements Model {
   readonly name = "mock";
 
@@ -260,12 +305,26 @@ export class MockModel implements Model {
     const longP = 1 / (1 + Math.exp(-signal));
     const bias: Bias = longP >= 0.5 ? "long" : "short";
     const against = (bias === "long" && state.position.side === "short") || (bias === "short" && state.position.side === "long");
-    const weak = Math.abs(signal) < 0.35 && state.position.side !== "flat";
-    const intent: Intent = against || weak ? "close" : "open";
-    const closeP = intent === "close" ? 0.65 : 0.35;
+    // A weak signal is not worth a round trip, so stand down instead of forcing a side.
+    const weak = Math.abs(signal) < 0.35;
+    const picked: Intent = against ? "close" : weak ? "hold" : "open";
+    const intent = liveIntent(state.position.side, picked);
+    const holdP = intent === "hold" ? 0.7 : 0.15;
+    const closeP = intent === "close" ? 0.7 : 0.15;
     const leverage = parseLeverage(1 + Math.abs(signal) * 8, state.maxLeverage, state.position.leverage ?? 1);
     await Bun.sleep(80);
-    return pack(intent, bias, leverage, longP, 1 - longP, 1 - closeP, closeP, performance.now() - t0, Math.round(JSON.stringify(state).length / 4));
+    return pack({
+      intent,
+      bias,
+      leverage,
+      longP,
+      shortP: 1 - longP,
+      openP: Math.max(0, 1 - holdP - closeP),
+      closeP,
+      holdP,
+      latencyMs: performance.now() - t0,
+      inputTokens: Math.round(JSON.stringify(state).length / 4),
+    });
   }
 
   private noise(tick: number) {
