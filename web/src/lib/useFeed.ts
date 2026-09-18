@@ -53,7 +53,7 @@ function avg(latSum: number, latCount: number): number {
 
 function insertFillPoint(tape: PricePoint[] | undefined, fill: Fill, ts: number): PricePoint[] {
   const cur = tape ?? [];
-  const mark = { side: fill.side, price: fill.price, size: fill.size, dir: fill.dir };
+  const mark = { side: fill.side, price: fill.price, size: fill.size, dir: fill.dir, hash: fill.txHash ?? undefined };
   for (let i = cur.length - 1; i >= 0; i--) {
     const p = cur[i]!;
     if (p.fill && p.ts === ts && p.fill.side === fill.side && p.fill.price === fill.price && p.fill.size === fill.size) {

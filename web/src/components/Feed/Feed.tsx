@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BlockEvent, Meta } from "@/lib/types";
+import type { BlockEvent, Meta, PricePoint } from "@/lib/types";
+import { tapeFills } from "@/lib/fills";
 import { fmtClock, fmtPrice, shortTx, txUrl } from "@/lib/format";
 import styles from "./Feed.module.css";
 
@@ -46,15 +47,11 @@ function wordOf(event: BlockEvent, kind: Kind): string {
   return "LATE";
 }
 
-function isFill(event: BlockEvent): boolean {
-  return Boolean(event.fill && event.fill.size > 0);
-}
-
 function isLiveRow(event: BlockEvent): boolean {
-  return isFill(event) || Boolean(event.decision && !event.decision.late);
+  return Boolean(event.fill && event.fill.size > 0) || Boolean(event.decision && !event.decision.late);
 }
 
-export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Meta | null }) {
+export default function Feed({ events, tape = [], meta }: { events: BlockEvent[]; tape?: PricePoint[]; meta?: Meta | null }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [capacity, setCapacity] = useState(MAX_ROWS);
   const [filter, setFilter] = useState<Filter>("live");
@@ -75,12 +72,9 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
     return () => ro.disconnect();
   }, []);
 
-  const filtered = useMemo(() => {
-    if (filter === "fills") return events.filter(isFill);
-    return events.filter(isLiveRow);
-  }, [events, filter]);
-
-  const rows = filtered.slice(-capacity).reverse();
+  const callRows = useMemo(() => events.filter(isLiveRow), [events]);
+  const fillRows = useMemo(() => tapeFills(tape), [tape]);
+  const rows = filter === "fills" ? fillRows : callRows;
 
   return (
     <section className={styles.feed}>
@@ -106,11 +100,35 @@ export default function Feed({ events, meta }: { events: BlockEvent[]; meta?: Me
           </button>
         </span>
       </div>
-      <div className={styles.list} ref={listRef}>
+      <div className={`${styles.list}${filter === "fills" ? ` ${styles.listScroll}` : ""}`} ref={listRef}>
         {rows.length === 0 ? (
           <div className={styles.empty}>{filter === "fills" ? "no fills yet" : "no calls yet"}</div>
+        ) : filter === "fills" ? (
+          [...fillRows].reverse().map((fill, i) => {
+            const kind = fill.side === "sell" ? "sell" : "buy";
+            const word = fill.dir === "open" ? "OPEN" : fill.dir === "close" ? "CLOSE" : fill.dir === "flip" ? "FLIP" : "FILL";
+            const detail = `${fill.dir ? `${fill.dir} ` : ""}${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
+            const rowClass = [styles.row, KIND_CLASS[kind], i === 0 ? styles.newest : "", styles.filled]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <div key={fill.key} className={rowClass}>
+                <span className={`${styles.cell} ${styles.time}`}>{fmtClock(fill.ts, true)}</span>
+                <span className={`${styles.cell} ${styles.word}`}>{word}</span>
+                <span className={`${styles.cell} ${styles.lat}`} />
+                <span className={`${styles.cell} ${styles.detail}`}>{detail}</span>
+                <span className={`${styles.cell} ${styles.tx}`}>
+                  {fill.hash ? (
+                    <a href={txUrl(fill.hash, meta?.explorerTx)} target="_blank" rel="noreferrer" title="Hyperliquid fill">
+                      {shortTx(fill.hash)}
+                    </a>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })
         ) : (
-          rows.map((event, i) => {
+          callRows.slice(-capacity).reverse().map((event, i) => {
             const kind = kindOf(event);
             const decision = event.decision;
             const quote = event.quote;

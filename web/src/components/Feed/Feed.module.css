@@ -68,6 +68,15 @@
   pointer-events: none;
 }
 
+.listScroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.listScroll::after {
+  display: none;
+}
+
 .row {
   flex: none;
   height: 26px;

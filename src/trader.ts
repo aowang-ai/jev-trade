@@ -11,6 +11,13 @@ const emptyTotals = (): Totals => ({
   jevUsd: 0, gasSz: 0, gasUsd: 0, realizedUsd: 0, pnlUsd: 0, pnlSz: 0, pnlPct: 0,
 });
 
+const JEV_PAUSE_MS = 30_000;
+
+export function jevUnavailable(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /402\b|no available TypeSafe API credits|insufficient credits/i.test(msg);
+}
+
 /**
  * Every tick: read the book and ask the model. A tick is late only when Jev
  * is still answering. Hyperliquid leverage/order I/O runs in the background
@@ -28,6 +35,7 @@ export class Trader {
   private exchangeTail: Promise<void> = Promise.resolve();
   private position = { sz: 0, costUsd: 0 };
   private totals: Totals = emptyTotals();
+  private jevPauseUntil = 0;
 
   constructor(
     private market: Market,
@@ -64,20 +72,42 @@ export class Trader {
       this.harvest();
 
       this.syncFromVenue();
-      const decision = await this.model.decide(this.buildState(block, book));
-      this.totals.decisions++;
-      this.totals.jevUsd += (decision.inputTokens / 1e6) * config.jevUsdPerMTok;
-      const plan = planQuote({
-        intent: decision.intent,
-        bias: decision.bias,
-        positionSz: this.position.sz,
-        quoteSz: this.market.quoteSize(book.mid),
-      });
-      this.emit(block, book, decision, null, false, { readMs: Math.round(readMs), loopMs: Math.round(performance.now() - t0) });
-      if (plan) this.enqueueQuote(block, decision, plan, book);
-      else this.enqueueStandDown();
+      const timing = { readMs: Math.round(readMs), loopMs: 0 };
+      if (Date.now() < this.jevPauseUntil) {
+        this.totals.lateBlocks++;
+        timing.loopMs = Math.round(performance.now() - t0);
+        this.emit(block, book, null, null, true, timing);
+        return;
+      }
+      try {
+        const decision = await this.model.decide(this.buildState(block, book));
+        this.totals.decisions++;
+        this.totals.jevUsd += (decision.inputTokens / 1e6) * config.jevUsdPerMTok;
+        const plan = planQuote({
+          intent: decision.intent,
+          bias: decision.bias,
+          positionSz: this.position.sz,
+          quoteSz: this.market.quoteSize(book.mid),
+        });
+        timing.loopMs = Math.round(performance.now() - t0);
+        this.emit(block, book, decision, null, false, timing);
+        if (plan) this.enqueueQuote(block, decision, plan, book);
+        else this.enqueueStandDown();
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (jevUnavailable(e)) {
+          this.jevPauseUntil = Date.now() + JEV_PAUSE_MS;
+          console.error(`jev paused ${JEV_PAUSE_MS / 1000}s: ${msg}`);
+        } else {
+          console.error(`tick ${block}:`, msg);
+        }
+        this.totals.lateBlocks++;
+        timing.loopMs = Math.round(performance.now() - t0);
+        this.emit(block, book, null, null, true, timing);
+      }
     } catch (e) {
       console.error(`tick ${block}:`, (e as Error).message);
+      if (this.lastBook) this.emit(block, this.lastBook, null, null, true);
     } finally {
       this.busy = false;
     }
@@ -231,8 +261,8 @@ export class Trader {
 
   private applyFill(f: Fill) {
     if (f.size <= 0) return;
-    this.totals.fills++;
     if (this.market.account) return;
+    this.totals.fills++;
     const signed = f.side === "buy" ? f.size : -f.size;
     const p = this.position;
     if (p.sz === 0 || Math.sign(p.sz) === Math.sign(signed)) {
@@ -257,6 +287,7 @@ export class Trader {
     this.position.costUsd = a.entryPrice != null && a.positionSz ? a.entryPrice * a.positionSz : 0;
     this.totals.realizedUsd = a.realizedUsd;
     this.totals.gasUsd = a.feesUsd;
+    this.totals.fills = this.market.fillPrints.length;
   }
 
   private entryPrice() { return this.position.sz ? this.position.costUsd / this.position.sz : null; }

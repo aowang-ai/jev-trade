@@ -31,8 +31,8 @@ export class Market {
   private lastSize = 0;
   private lastReduce = false;
   private fills = new FillPnlBook();
-  readonly fillPrints: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"] }[] = [];
-  onVenueFill: ((fill: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"] }) => void) | null = null;
+  readonly fillPrints: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"]; hash?: string }[] = [];
+  onVenueFill: ((fill: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"]; hash?: string }) => void) | null = null;
 
   get chartPoints() {
     return this.feed.chart.points;
@@ -121,7 +121,8 @@ export class Market {
     const side: Side | null =
       fill.side === "B" || fill.side === "buy" ? "buy" : fill.side === "A" || fill.side === "sell" ? "sell" : null;
     if (side && Number.isFinite(ts) && ts > 0 && Number.isFinite(price) && price > 0) {
-      const print = { ts, side, price, size: Number.isFinite(size) ? size : 0, dir: fillDir(fill.dir) };
+      const hash = typeof fill.hash === "string" && fill.hash ? fill.hash : undefined;
+      const print = { ts, side, price, size: Number.isFinite(size) ? size : 0, dir: fillDir(fill.dir), hash };
       this.fillPrints.push(print);
       if (this.feed.chart.addFill(print)) this.onVenueFill?.(print);
     }

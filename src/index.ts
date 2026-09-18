@@ -50,7 +50,7 @@ for (const spec of specs) {
           side: p.side,
           size: p.size,
           price: p.price,
-          txHash: null,
+          txHash: p.hash ?? null,
           orderId: 0,
           simulated: false,
           dir: p.dir,

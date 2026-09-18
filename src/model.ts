@@ -90,7 +90,8 @@ export interface Model {
   decide(state: TradeState): Promise<ModelDecision>;
 }
 
-function questions(state: TradeState) {
+/** What Jev is asked. Mechanics only: no hurdle, horizon, or "when to trade" rule. */
+export function jevQuestions(state: TradeState) {
   const asset = state.coin;
   const pos = state.position;
   const stance = pos.side === "flat"
@@ -100,10 +101,10 @@ function questions(state: TradeState) {
   const rungs = leverageRungs(state.maxLeverage);
   const levCriteria: Record<string, string> = {};
   for (const n of rungs) {
-    levCriteria[String(n)] = `${n}x cross leverage on ${asset}. Higher leverage uses less margin for the same quote and raises liquidation risk.`;
+    levCriteria[String(n)] = `${n}x cross leverage on ${asset}.`;
   }
   const ctx = `You trade only ${asset} (${state.market}) on Hyperliquid. position is the live book and PnL (unrealizedUsd, realizedUsd, feesUsd, pnlUsd, pnlPct, liquidationPx). indicators are from 1m closes (sma20, sma50, ema20, rsi14, vol20Bps, rangePos20, midVsSma20Bps). asset is mark/oracle/fundingBps/premiumBps/openInterest/dayChangeBps/dayNtlVlmUsd. trades and book are the live tape. recentFills are this wallet's fills.`;
-  const cost = `An entry rests post-only and pays the maker fee. An exit crosses the touch and pays the taker fee. A full round trip costs roughly the maker fee plus the taker fee on top of the ${state.spreadBps} bps spread, so a move you cannot name in bps is not worth trading.`;
+  const mechanics = `An open rests a post-only limit one tick inside the touch (maker). A close is an Ioc that crosses the touch (taker). A hold sends no order and cancels any resting quote. Live spread is ${state.spreadBps} bps.`;
   const bias = {
     type: "choice",
     instructions: {
@@ -113,15 +114,15 @@ function questions(state: TradeState) {
       inputs: ctx,
     },
     criteria: {
-      long: `Long ${asset}: mid more likely higher after \`horizonTicks\` ticks, by more than the spread.`,
-      short: `Short ${asset}: mid more likely lower after \`horizonTicks\` ticks, by more than the spread.`,
+      long: `Long ${asset}.`,
+      short: `Short ${asset}.`,
     },
   };
   const leverage = {
     type: "choice",
     instructions: {
       question: `What cross leverage should the ${asset} account use this tick?`,
-      goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x. Read liquidationPx and equity before sizing risk.`,
+      goal: `You pick leverage. Current ${levNow}. Hyperliquid max is ${state.maxLeverage}x.`,
       timing: "Leverage is updated on the wallet before the order is sent. It is ignored on a hold.",
       inputs: `${ctx} Allowed rungs: ${rungs.join(" ")}.`,
     },
@@ -135,13 +136,13 @@ function questions(state: TradeState) {
         type: "choice",
         instructions: {
           question: `Take a ${asset} position this tick, or stay flat?`,
-          goal: `You are flat, so there is nothing to close. Open starts a position in the long/short you picked. Hold stays flat and puts no order on the book. Holding is free and always available; most ticks do not carry an edge worth paying for.`,
-          timing: "An entry is a post-only limit one tick inside the touch. It fills only when a taker hits it, which means it fills when the tape is running against it.",
-          inputs: `${ctx} ${cost} Current: ${stance}. ${money}.`,
+          goal: `You are flat. Open starts a position in the long/short you picked. Hold stays flat and sends no order.`,
+          timing: mechanics,
+          inputs: `${ctx} Current: ${stance}. ${money}.`,
         },
         criteria: {
-          open: `Open ${asset} on the long/short you picked. Only when the expected move over \`horizonTicks\` clears the spread and the round trip fee.`,
-          hold: `Stay flat. No order is sent. Pick this when the tape is noise, the spread is wide against the move you expect, the book is thin, or the signals disagree.`,
+          open: `Open ${asset} on the long/short you picked.`,
+          hold: `Stay flat. No order is sent.`,
         },
       },
       leverage,
@@ -153,14 +154,14 @@ function questions(state: TradeState) {
       type: "choice",
       instructions: {
         question: `Add to the ${asset} position, flatten it, or leave it alone this tick?`,
-        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is. Hold sends nothing and leaves the position untouched. Doing nothing is a real answer, not a fallback.",
-        timing: "An add rests post-only and fills only if a taker hits it. A close crosses the touch and fills now at the taker fee. A hold also pulls any resting add, so the book carries no order you did not ask for.",
-        inputs: `${ctx} ${cost} Current: ${stance}. ${money}.`,
+        goal: "Open adds in the long/short you picked. Close flattens the live Hyperliquid position, whatever side it is. Hold sends nothing and leaves the position untouched.",
+        timing: mechanics,
+        inputs: `${ctx} Current: ${stance}. ${money}.`,
       },
       criteria: {
-        open: `Add to ${asset} on the long/short you picked. Only when the case is stronger than when the position was opened.`,
-        close: `Flatten the live ${asset} position now, paying the taker fee to be out. Pick this when the reason for the position is gone, not merely because it is offside.`,
-        hold: `Leave the position exactly as it is and send nothing. Pick this when the position still makes sense and adding would only raise the fee bill and the risk.`,
+        open: `Add to ${asset} on the long/short you picked.`,
+        close: `Flatten the live ${asset} position.`,
+        hold: `Leave the position as it is. Send nothing.`,
       },
     },
     leverage,
@@ -243,7 +244,7 @@ function typesafeClient(): TypeSafeClient {
 }
 
 async function callJev(state: TradeState): Promise<{ answers: JevAnswers; inputTokens: number }> {
-  const qs = questions(state);
+  const qs = jevQuestions(state);
   if (config.jevProvider === "gateway") {
     const r = await evaluate({
       model: config.jevModelId,

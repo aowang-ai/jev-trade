@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
 import { leverageRungs, liveIntent, parseLeverage, planQuote, quoteAction } from "../src/plan";
+import { jevUnavailable } from "../src/trader";
+
+test("jevUnavailable detects a TypeSafe credit 402", () => {
+  expect(jevUnavailable(new Error("402 Your organization has no available TypeSafe API credits. Please add more credits"))).toBe(true);
+  expect(jevUnavailable(new Error("hyperliquid rate limited"))).toBe(false);
+});
 
 test("open long buys and open short sells, resting post-only", () => {
   expect(quoteAction("open", "long")).toBe("buy");

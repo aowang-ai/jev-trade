@@ -50,7 +50,7 @@ export interface PricePoint {
   ts: number;
   mid: number;
   block?: number;
-  fill?: { side: Side; price: number; size: number; dir?: "open" | "close" | "flip" };
+  fill?: { side: Side; price: number; size: number; dir?: "open" | "close" | "flip"; hash?: string };
 }
 
 export interface Decision {
