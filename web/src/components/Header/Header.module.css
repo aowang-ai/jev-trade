@@ -19,7 +19,7 @@
   font-weight: 700;
   font-size: 14px;
   line-height: 1;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -32,7 +32,7 @@
   font-weight: 700;
   font-size: 12px;
   line-height: 1;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -87,7 +87,7 @@
 
   .brand {
     font-size: 12px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.02em;
   }
 
   .status {

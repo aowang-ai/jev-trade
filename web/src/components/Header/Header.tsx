@@ -18,11 +18,11 @@ export default function Header({ connection, portfolioPnl }: HeaderProps) {
     <div className={styles.header}>
       <span className={styles.brandLockup}>
         <Logo size={20} />
-        <span className={styles.brand}>JEV TRADE</span>
+        <span className={styles.brand}>Jev Trade</span>
       </span>
       <span className={styles.status} data-live={live ? "true" : "false"}>
         <span className={styles.dot} aria-hidden="true" />
-        <span>{live ? "LIVE" : "OFFLINE"}</span>
+        <span>{live ? "Live" : "Offline"}</span>
       </span>
       <span className={styles.spacer} />
       <span className={styles.score}>
