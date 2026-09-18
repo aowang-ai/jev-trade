@@ -8,6 +8,8 @@ const TAPE_CAP = 200_000;
 const BACKOFF_MIN = 1000;
 const BACKOFF_MAX = 10_000;
 const STALE_MS = 45_000;
+/** First snapshot used to be multi-MB. Wait longer before calling the socket dead. */
+const FIRST_EVENT_MS = 90_000;
 
 interface SleeveMem extends SleeveFeed {
   latSum: number;
@@ -25,7 +27,8 @@ type Action =
   | { type: "block"; event: BlockEvent }
   | { type: "fill"; coin: string; block: number; fill: Fill; ts?: number }
   | { type: "quote"; coin: string; block: number; quote: Quote }
-  | { type: "connection"; connection: ConnectionState };
+  | { type: "connection"; connection: ConnectionState }
+  | { type: "tapes"; tapeByCoin: Record<string, PricePoint[]> };
 
 const emptySleeve = (): SleeveMem => ({
   events: [],
@@ -163,6 +166,17 @@ function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case "tapes": {
+      let next = state;
+      for (const [coin, tape] of Object.entries(action.tapeByCoin)) {
+        if (!tape.length) continue;
+        const s = next.sleeves[coin] ?? emptySleeve();
+        if (tape.length <= (s.tape?.length ?? 0)) continue;
+        next = replaceSleeve(next, coin, { ...s, tape: tape.length > TAPE_CAP ? tape.slice(tape.length - TAPE_CAP) : tape });
+      }
+      return next;
+    }
+
     case "connection":
       return state.connection === action.connection ? state : { ...state, connection: action.connection };
 
@@ -303,11 +317,11 @@ export function useFeed(apiUrl: string): FeedState {
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let staleTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const armStaleTimer = () => {
+    const armStaleTimer = (ms = STALE_MS) => {
       if (staleTimer) clearTimeout(staleTimer);
       staleTimer = setTimeout(() => {
         if (!closed) scheduleReconnect();
-      }, STALE_MS);
+      }, ms);
     };
 
     const teardown = () => {
@@ -345,6 +359,19 @@ export function useFeed(apiUrl: string): FeedState {
       });
     };
 
+    const hydrateTape = async (base: string) => {
+      try {
+        const r = await fetch(`${base}/tape`);
+        if (!r.ok) return;
+        const raw = await r.json();
+        const tapeByCoin: Record<string, PricePoint[]> = {};
+        for (const [coin, rows] of Object.entries(mapByCoin(raw))) tapeByCoin[coin] = asTape(rows);
+        if (Object.keys(tapeByCoin).length) dispatch({ type: "tapes", tapeByCoin });
+      } catch {
+        // Compact snapshot tape is enough for the default chart.
+      }
+    };
+
     function connect() {
       if (closed) return;
       dispatch({ type: "connection", connection: attempt === 0 ? "connecting" : "reconnecting" });
@@ -353,7 +380,7 @@ export function useFeed(apiUrl: string): FeedState {
       es.onopen = () => {
         attempt = 0;
         dispatch({ type: "connection", connection: "live" });
-        armStaleTimer();
+        armStaleTimer(FIRST_EVENT_MS);
       };
       es.onerror = () => {
         if (!closed) scheduleReconnect();
@@ -373,6 +400,7 @@ export function useFeed(apiUrl: string): FeedState {
           tapeByCoin[coin] = asTape(d.tape);
         }
         dispatch({ type: "snapshot", meta: parseMeta(d), historyByCoin, tapeByCoin });
+        void hydrateTape(base);
       });
       handle("block", (data) => {
         dispatch({ type: "block", event: data as BlockEvent });

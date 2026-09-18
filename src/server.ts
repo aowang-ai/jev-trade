@@ -1,4 +1,5 @@
 import { config } from "./config";
+import { clipHistory, clipTape } from "./snapshot";
 import type { BlockEvent, Fill, Meta, PricePoint, Quote } from "./types";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
@@ -25,6 +26,15 @@ export function startServer(meta: Meta, sleeves: SleeveView[]) {
     for (const s of sleeves) out[s.coin] = s.tape();
     return out;
   };
+  const snapshotBody = () => {
+    const history: Record<string, BlockEvent[]> = {};
+    const tape: Record<string, PricePoint[]> = {};
+    for (const s of sleeves) {
+      history[s.coin] = clipHistory(s.history());
+      tape[s.coin] = clipTape(s.tape());
+    }
+    return { ...meta, historyByCoin: history, tapeByCoin: tape };
+  };
   const latestByCoin = () => {
     const out: Record<string, BlockEvent | null> = {};
     for (const s of sleeves) out[s.coin] = s.history().at(-1) ?? null;
@@ -43,7 +53,7 @@ export function startServer(meta: Meta, sleeves: SleeveView[]) {
         const stream = new ReadableStream<Uint8Array>({
           start(c) {
             clients.add(c);
-            send(c, "snapshot", { ...meta, historyByCoin: historyByCoin(), tapeByCoin: tapeByCoin() });
+            send(c, "snapshot", snapshotBody());
           },
           cancel(c) { clients.delete(c); },
         });
