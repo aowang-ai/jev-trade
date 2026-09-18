@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
+import { mergeLiveTape, pushLive } from "./live";
 import type { BlockEvent, ConnectionState, FeedState, Fill, Meta, PricePoint, Quote, SleeveFeed } from "./types";
 
 const CAP = 1000;
@@ -11,9 +12,19 @@ const STALE_MS = 45_000;
 /** First snapshot used to be multi-MB. Wait longer before calling the socket dead. */
 const FIRST_EVENT_MS = 90_000;
 
+interface Mark {
+  ts: number;
+  mid: number;
+  bestBid: number;
+  bestAsk: number;
+  spreadBps: number;
+}
+
 interface SleeveMem extends SleeveFeed {
   latSum: number;
   latCount: number;
+  mark: Mark | null;
+  live: PricePoint[];
 }
 
 interface State {
@@ -28,7 +39,8 @@ type Action =
   | { type: "fill"; coin: string; block: number; fill: Fill; ts?: number }
   | { type: "quote"; coin: string; block: number; quote: Quote }
   | { type: "connection"; connection: ConnectionState }
-  | { type: "tapes"; tapeByCoin: Record<string, PricePoint[]> };
+  | { type: "tapes"; tapeByCoin: Record<string, PricePoint[]> }
+  | { type: "price"; coin: string; mark: Mark };
 
 const emptySleeve = (): SleeveMem => ({
   events: [],
@@ -37,6 +49,8 @@ const emptySleeve = (): SleeveMem => ({
   avgLatencyMs: 0,
   latSum: 0,
   latCount: 0,
+  mark: null,
+  live: [],
 });
 
 function latencyOf(e: BlockEvent): number | null {
@@ -76,6 +90,41 @@ function insertFillPoint(tape: PricePoint[] | undefined, fill: Fill, ts: number)
   return next.length > TAPE_CAP ? next.slice(next.length - TAPE_CAP) : next;
 }
 
+function stubLatest(coin: string, mark: Mark): BlockEvent {
+  return {
+    coin,
+    block: 0,
+    ts: mark.ts,
+    mid: mark.mid,
+    bestBid: mark.bestBid,
+    bestAsk: mark.bestAsk,
+    spreadBps: mark.spreadBps,
+    decision: null,
+    quote: null,
+    fill: null,
+    resting: { bidSz: 0, askSz: 0 },
+    position: { side: "flat", size: 0, entryPrice: null, leverage: null, unrealizedUsd: 0, unrealizedSz: 0 },
+    totals: {
+      blocks: 0, decisions: 0, quotes: 0, fills: 0, reverted: 0, lateBlocks: 0,
+      jevUsd: 0, gasSz: 0, gasUsd: 0, realizedUsd: 0, pnlUsd: 0, pnlSz: 0, pnlPct: 0,
+    },
+  };
+}
+
+function paintLatest(coin: string, latest: BlockEvent | null, mark: Mark | null): BlockEvent | null {
+  if (!mark) return latest;
+  if (!latest) return stubLatest(coin, mark);
+  if (mark.ts < latest.ts) return latest;
+  return {
+    ...latest,
+    ts: mark.ts,
+    mid: mark.mid,
+    bestBid: mark.bestBid,
+    bestAsk: mark.bestAsk,
+    spreadBps: mark.spreadBps,
+  };
+}
+
 function viewOf(s: SleeveMem): SleeveMem {
   return { ...s, avgLatencyMs: avg(s.latSum, s.latCount) };
 }
@@ -95,13 +144,18 @@ function fromHistory(history: BlockEvent[], tape: PricePoint[]): SleeveMem {
       latCount++;
     }
   }
+  const latest = events.length ? events[events.length - 1]! : null;
   return viewOf({
     events,
     tape,
-    latest: events.length ? events[events.length - 1]! : null,
+    latest,
     avgLatencyMs: 0,
     latSum,
     latCount,
+    mark: latest
+      ? { ts: latest.ts, mid: latest.mid, bestBid: latest.bestBid, bestAsk: latest.bestAsk, spreadBps: latest.spreadBps }
+      : null,
+    live: [],
   });
 }
 
@@ -166,6 +220,15 @@ function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case "price": {
+      const s = state.sleeves[action.coin] ?? emptySleeve();
+      return replaceSleeve(state, action.coin, {
+        ...s,
+        mark: action.mark,
+        live: pushLive(s.live, { ts: action.mark.ts, mid: action.mark.mid }),
+      });
+    }
+
     case "tapes": {
       let next = state;
       for (const [coin, tape] of Object.entries(action.tapeByCoin)) {
@@ -297,7 +360,7 @@ function mapByCoin(raw: unknown): Record<string, unknown[]> {
  * Live sleeve feed over SSE.
  *
  * Connects to `${apiUrl}/events` and handles: `snapshot` (meta + historyByCoin + tapeByCoin),
- * `block` (per coin, deduped by block number, capped at 1000), `quote` / `fill`
+ * `block` (per coin, deduped by block number, capped at 1000), `price` (live mid), `quote` / `fill`
  * ({ coin, block, ... }) and `ping`. Reconnects with 1s -> 10s backoff.
  */
 export function useFeed(apiUrl: string): FeedState {
@@ -405,6 +468,21 @@ export function useFeed(apiUrl: string): FeedState {
       handle("block", (data) => {
         dispatch({ type: "block", event: data as BlockEvent });
       });
+      handle("price", (data) => {
+        const d = (data ?? {}) as { coin?: string; ts?: number; mid?: number; bestBid?: number; bestAsk?: number; spreadBps?: number };
+        if (typeof d.coin !== "string" || typeof d.mid !== "number" || typeof d.ts !== "number") return;
+        dispatch({
+          type: "price",
+          coin: d.coin,
+          mark: {
+            ts: d.ts,
+            mid: d.mid,
+            bestBid: typeof d.bestBid === "number" ? d.bestBid : d.mid,
+            bestAsk: typeof d.bestAsk === "number" ? d.bestAsk : d.mid,
+            spreadBps: typeof d.spreadBps === "number" ? d.spreadBps : 0,
+          },
+        });
+      });
       handle("fill", (data) => {
         const d = (data ?? {}) as { coin?: string; block?: number; fill?: Fill; ts?: number };
         if (typeof d.coin !== "string" || !d.fill) return;
@@ -437,7 +515,12 @@ export function useFeed(apiUrl: string): FeedState {
 
   const byCoin: Record<string, SleeveFeed> = {};
   for (const [coin, s] of Object.entries(state.sleeves)) {
-    byCoin[coin] = { events: s.events, tape: s.tape, latest: s.latest, avgLatencyMs: s.avgLatencyMs };
+    byCoin[coin] = {
+      events: s.events,
+      tape: mergeLiveTape(s.tape, s.live),
+      latest: paintLatest(coin, s.latest, s.mark),
+      avgLatencyMs: s.avgLatencyMs,
+    };
   }
 
   return { meta: state.meta, connection: state.connection, byCoin };

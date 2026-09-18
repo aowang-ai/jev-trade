@@ -34,6 +34,15 @@ for (const spec of specs) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const feed = new Feed(spec.coin);
+      feed.onPrice = (book) => {
+        server?.broadcastPrice(spec.coin, {
+          ts: Date.now(),
+          mid: book.mid,
+          bestBid: book.bid,
+          bestAsk: book.ask,
+          spreadBps: book.spreadBps,
+        });
+      };
       await feed.connect();
       const market = new Market(feed, spec);
       await market.init();
@@ -81,7 +90,7 @@ if (!views.length) throw new Error("no sleeves started");
 server = startServer(meta, views);
 for (const start of starters) start();
 
-console.log(`jev-trade ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model}${config.model === "jev" ? ` ${config.jevProvider}` : ""} tick ${config.tickMs}ms quote $${config.quoteUsd} :${config.port}`);
+console.log(`jev-trade ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model}${config.model === "jev" ? ` ${config.jevProvider}` : ""} tick ${config.tickMs}ms price ${config.priceMs}ms quote $${config.quoteUsd} :${config.port}`);
 
 function onEvent(coin: string) {
   return (e: BlockEvent, t?: Timing) => {

@@ -26,7 +26,10 @@ export class Feed {
   onClearinghouse: ((state: ClearinghouseLike) => void) | null = null;
   onUserPnl: ((fill: FillPnlLike) => void) | null = null;
   private lastTickAt = 0;
+  private lastPriceAt = 0;
+  private lastPriceMid = Number.NaN;
   private onTick: ((tick: number) => void) | null = null;
+  onPrice: ((book: Book) => void) | null = null;
   private user: `0x${string}` | null = null;
   private ws: WebSocket | null = null;
   private ping: ReturnType<typeof setInterval> | null = null;
@@ -55,6 +58,7 @@ export class Feed {
 
   start(onTick: (tick: number) => void) {
     this.onTick = onTick;
+    this.maybePrice();
     this.maybeTick();
   }
 
@@ -112,6 +116,7 @@ export class Feed {
       const next = bookFromLevels(this.tick, m.data.levels[0] ?? [], m.data.levels[1] ?? []);
       if (next) {
         this.book = next;
+        this.maybePrice();
         this.maybeTick();
       }
       return;
@@ -207,6 +212,16 @@ export class Feed {
       size: Number(t.sz),
       side: t.side === "B" ? "buy" : "sell",
     });
+  }
+
+  private maybePrice() {
+    if (!this.book || !this.onPrice) return;
+    const now = Date.now();
+    if (now - this.lastPriceAt < config.priceMs) return;
+    if (this.book.mid === this.lastPriceMid) return;
+    this.lastPriceAt = now;
+    this.lastPriceMid = this.book.mid;
+    this.onPrice(this.book);
   }
 
   private maybeTick() {

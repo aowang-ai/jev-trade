@@ -68,5 +68,7 @@ export function startServer(meta: Meta, sleeves: SleeveView[]) {
     broadcast: (e: BlockEvent) => broadcast("block", e),
     broadcastQuote: (coin: string, block: number, quote: Quote) => broadcast("quote", { coin, block, quote }),
     broadcastFill: (coin: string, block: number, fill: Fill, ts?: number) => broadcast("fill", { coin, block, fill, ts }),
+    broadcastPrice: (coin: string, print: { ts: number; mid: number; bestBid: number; bestAsk: number; spreadBps: number }) =>
+      broadcast("price", { coin, ...print }),
   };
 }
