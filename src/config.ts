@@ -41,7 +41,7 @@ const jevModelId = resolveJevModelId(process.env, jevProvider);
 
 export const config = {
   hlTestnet,
-  tickMs: Number(env("TICK_MS", "1000")),
+  tickMs: Number(env("TICK_MS", "2000")),
   /** Book/price prints for the chart. Independent of Jev ticks. */
   priceMs: Math.max(50, Number(env("PRICE_MS", "200"))),
   explorerTx: hlTestnet

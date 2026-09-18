@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Book from "@/components/Book/Book";
 import DecisionPanel from "@/components/DecisionPanel/DecisionPanel";
 import Feed from "@/components/Feed/Feed";
 import FlowChart from "@/components/FlowChart/FlowChart";
 import Header from "@/components/Header/Header";
 import SleeveStrip from "@/components/SleeveStrip/SleeveStrip";
 import { lastMeaningfulCall } from "@/lib/format";
+import { portfolioPnl } from "@/lib/pnl";
 import { useFeed } from "@/lib/useFeed";
 import type { BlockEvent, Meta, SleeveFeed } from "@/lib/types";
 import styles from "./page.module.css";
@@ -46,6 +48,12 @@ export default function Page() {
     return out;
   }, [coins, feed.byCoin]);
 
+  const tapeByCoin = useMemo(() => {
+    const out: Record<string, NonNullable<SleeveFeed["tape"]>> = {};
+    for (const c of coins) out[c] = feed.byCoin[c]?.tape ?? [];
+    return out;
+  }, [coins, feed.byCoin]);
+
   const lastCallByCoin = useMemo(() => {
     const out: Record<string, string> = {};
     for (const c of coins) {
@@ -55,22 +63,16 @@ export default function Page() {
     return out;
   }, [coins, feed.byCoin]);
 
-  const portfolioPnl = useMemo(() => {
-    let sum = 0;
-    let any = false;
-    for (const c of coins) {
-      const pnl = feed.byCoin[c]?.latest?.totals?.pnlUsd;
-      if (typeof pnl === "number" && Number.isFinite(pnl)) {
-        sum += pnl;
-        any = true;
-      }
-    }
-    return any ? sum : null;
-  }, [coins, feed.byCoin]);
+  const pnl = useMemo(() => portfolioPnl(latestByCoin), [latestByCoin]);
+  const hasBooks = coins.some((c) => latestByCoin[c]);
 
   return (
     <div className="shell">
-      <Header connection={feed.connection} portfolioPnl={portfolioPnl} />
+      <Header
+        connection={feed.connection}
+        unrealized={hasBooks ? pnl.unrealized : null}
+        realized={hasBooks ? pnl.realized : null}
+      />
       <SleeveStrip
         sleeves={feed.meta?.sleeves ?? []}
         latestByCoin={latestByCoin}
@@ -92,9 +94,18 @@ export default function Page() {
         </div>
         <div className={styles.right}>
           <DecisionPanel latest={sleeve.latest} meta={meta} />
-          <Feed events={sleeve.events} tape={sleeve.tape ?? []} meta={meta} onNeedMoreTape={feed.loadTape} />
+          <Feed events={sleeve.events} meta={meta} />
         </div>
       </div>
+      <Book
+        sleeves={feed.meta?.sleeves ?? []}
+        latestByCoin={latestByCoin}
+        tapeByCoin={tapeByCoin}
+        selected={coin}
+        meta={meta}
+        onSelect={setPicked}
+        onNeedMoreTape={feed.loadTape}
+      />
     </div>
   );
 }

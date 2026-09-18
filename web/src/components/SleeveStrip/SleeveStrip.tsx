@@ -25,9 +25,10 @@ export default function SleeveStrip({
       {sleeves.map((sleeve) => {
         const latest = latestByCoin[sleeve.coin] ?? null;
         const pos = latest?.position ?? null;
-        const pnl = pnlOf(latest);
+        const open = Boolean(pos && pos.side !== "flat");
+        const pnl = openPnl(latest);
         const active = sleeve.coin === selected;
-        const pnlColor = latest ? (pnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)") : undefined;
+        const pnlColor = open ? (pnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)") : undefined;
         const side = (pos?.side ?? "flat").toUpperCase();
         const sideColor =
           pos?.side === "long" ? "var(--buy-ink)" : pos?.side === "short" ? "var(--sell-ink)" : undefined;
@@ -42,7 +43,7 @@ export default function SleeveStrip({
             className={`${styles.card} ${active ? styles.active : ""}`}
             onClick={() => onSelect(sleeve.coin)}
             aria-pressed={active}
-            aria-label={`${displayCoin(sleeve.coin)} ${side} pnl ${latest ? fmtSignedUsd(pnl, 2) : "unknown"}`}
+            aria-label={`${displayCoin(sleeve.coin)} ${side}${open ? ` unrealized ${fmtSignedUsd(pnl, 2)}` : ""}`}
           >
             <span className={styles.top}>
               <span className={styles.name}>
@@ -51,8 +52,8 @@ export default function SleeveStrip({
               </span>
               <span className={styles.mid}>{latest ? fmtPrice(latest.mid) : "-"}</span>
             </span>
-            <span className={styles.pnl} style={{ color: pnlColor }}>
-              {latest ? fmtSignedUsd(pnl, 2) : "-"}
+            <span className={styles.pnl} style={pnlColor ? { color: pnlColor } : undefined}>
+              {open ? fmtSignedUsd(pnl, 2) : "-"}
             </span>
             <span className={styles.book} style={sideColor ? { color: sideColor } : undefined}>
               {side}
@@ -67,7 +68,8 @@ export default function SleeveStrip({
   );
 }
 
-function pnlOf(latest: BlockEvent | null | undefined): number {
-  if (!latest) return 0;
-  return latest.totals?.pnlUsd ?? latest.position?.unrealizedUsd ?? 0;
+function openPnl(latest: BlockEvent | null | undefined): number {
+  const pos = latest?.position;
+  if (!pos || pos.side === "flat") return 0;
+  return pos.unrealizedUsd ?? 0;
 }

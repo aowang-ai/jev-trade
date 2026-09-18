@@ -99,20 +99,19 @@ export function barsForView(tape: PricePoint[], bar: BarSize): Candle[] {
   return older.concat(from1m);
 }
 
+/** One buy and one sell mark per candle. TradingView groups dense executions the same way. */
 export function fillMarks(tape: PricePoint[], bar: BarSize): FillMark[] {
   const interval = barMs(bar);
-  const out: FillMark[] = [];
-  const seen = new Set<string>();
+  const byKey = new Map<string, FillMark>();
   for (const p of tape) {
     const f = p.fill;
     if (!f || !(p.ts > 0)) continue;
     const time = asUtcSec(bucketTs(p.ts, interval));
-    const key = `${time}|${f.side}|${f.price}|${f.size}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ time, side: f.side });
+    const key = `${time}|${f.side}`;
+    if (byKey.has(key)) continue;
+    byKey.set(key, { time, side: f.side });
   }
-  return out;
+  return [...byKey.values()].sort((a, b) => a.time - b.time || (a.side === "buy" ? -1 : 1));
 }
 
 function upsertBar(tape: PricePoint[], mid: number, ts: number, bar: "1s" | "1m" | "15m"): PricePoint[] {

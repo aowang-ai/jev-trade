@@ -4,13 +4,13 @@ import type { BlockEvent, PricePoint } from "./types";
 export const SNAPSHOT_HISTORY = 12;
 /** Recent 1s candles for the default 15m 秒K. */
 export const SNAPSHOT_SECS = 900;
-/** 1m fallback when the 1s tail is still short. */
-export const SNAPSHOT_MIDS = 24;
+/** Enough 1m bars to paint a first 5m window before /tape. */
+export const SNAPSHOT_MIDS = 400;
 export const SNAPSHOT_FILLS = 12;
 /** 1s tail on /tape. Older time is 1m then 15m. */
 export const TAPE_SECS = 900;
-/** 24h of 1m on /tape. Older time is 15m bars. */
-export const TAPE_MIDS = 1440;
+/** All venue 1m bars on /tape. Older time is 15m bars. */
+export const TAPE_MIDS = 5000;
 
 function byTime(a: PricePoint, b: PricePoint): number {
   return a.ts - b.ts || (a.fill ? 1 : 0) - (b.fill ? 1 : 0);

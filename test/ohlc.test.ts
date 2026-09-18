@@ -20,6 +20,20 @@ test("barsForView reads 1m ohlc and rolls them into 15m", () => {
   expect(fillMarks(tape, "1m")).toEqual([{ time: (M15_MS + 0) / 1000, side: "buy" }]);
 });
 
+test("fillMarks keeps one arrow per side on a candle", () => {
+  const tape: PricePoint[] = [
+    { ts: M15_MS + 1_000, mid: 100, fill: { side: "buy", price: 100, size: 1 } },
+    { ts: M15_MS + 2_000, mid: 101, fill: { side: "buy", price: 101, size: 2 } },
+    { ts: M15_MS + 3_000, mid: 99, fill: { side: "sell", price: 99, size: 1 } },
+    { ts: M15_MS + 60_000, mid: 102, fill: { side: "sell", price: 102, size: 1 } },
+  ];
+  expect(fillMarks(tape, "1m")).toEqual([
+    { time: M15_MS / 1000, side: "buy" },
+    { time: M15_MS / 1000, side: "sell" },
+    { time: (M15_MS + 60_000) / 1000, side: "sell" },
+  ]);
+});
+
 test("barsForView 1s uses only 1s prints", () => {
   const tape: PricePoint[] = [
     { ts: 0, mid: 100, open: 100, high: 101, low: 99, close: 100, bar: "1m" },

@@ -5,10 +5,12 @@ import {
   CandlestickSeries,
   ColorType,
   CrosshairMode,
+  LineStyle,
   createChart,
   createSeriesMarkers,
   type CandlestickData,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
   type SeriesMarker,
@@ -17,9 +19,15 @@ import {
 } from "lightweight-charts";
 import type { Candle, FillMark } from "@/lib/ohlc";
 
+export type EntryLine = {
+  price: number;
+  side: "long" | "short";
+};
+
 type Props = {
   candles: Candle[];
   marks: FillMark[];
+  entry: EntryLine | null;
   rangeKey: string;
   visibleBars: number;
   secondsVisible: boolean;
@@ -51,7 +59,7 @@ function toMarkers(rows: FillMark[]): SeriesMarker<Time>[] {
     position: m.side === "buy" ? "belowBar" : "aboveBar",
     shape: m.side === "buy" ? "arrowUp" : "arrowDown",
     color: m.side === "buy" ? BUY : SELL,
-    size: 1.4,
+    size: 0.8,
   }));
 }
 
@@ -70,6 +78,7 @@ function showLatest(chart: IChartApi | null, count: number, visibleBars: number)
 export default function CandlePane({
   candles,
   marks,
+  entry,
   rangeKey,
   visibleBars,
   secondsVisible,
@@ -79,6 +88,7 @@ export default function CandlePane({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const entryLineRef = useRef<IPriceLine | null>(null);
   const stemRef = useRef("");
   const rangeRef = useRef("");
   const formatRef = useRef(formatPrice);
@@ -134,6 +144,7 @@ export default function CandlePane({
       chartRef.current = null;
       seriesRef.current = null;
       markersRef.current = null;
+      entryLineRef.current = null;
       stemRef.current = "";
       rangeRef.current = "";
     };
@@ -169,6 +180,31 @@ export default function CandlePane({
   useEffect(() => {
     markersRef.current?.setMarkers(toMarkers(marks));
   }, [marks]);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    if (!entry || !(entry.price > 0)) {
+      if (entryLineRef.current) {
+        series.removePriceLine(entryLineRef.current);
+        entryLineRef.current = null;
+      }
+      return;
+    }
+    const next = {
+      price: entry.price,
+      color: entry.side === "long" ? BUY : SELL,
+      lineWidth: 1 as const,
+      lineStyle: LineStyle.Solid,
+      axisLabelVisible: true,
+      title: "entry",
+    };
+    if (entryLineRef.current) {
+      entryLineRef.current.applyOptions(next);
+      return;
+    }
+    entryLineRef.current = series.createPriceLine(next);
+  }, [entry]);
 
   return <div ref={hostRef} className="lwc-host" style={{ position: "absolute", inset: 0 }} />;
 }

@@ -60,6 +60,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.header .score + .score {
+  margin-left: 16px;
+}
+
 .scoreKey {
   font-weight: 700;
   font-size: 12px;

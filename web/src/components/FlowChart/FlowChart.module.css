@@ -89,6 +89,14 @@
   border-top: 5px solid var(--sell);
 }
 
+.legEntry::before {
+  width: 10px;
+  height: 0;
+  border: 0;
+  border-top: 2px solid var(--ink);
+  vertical-align: 3px;
+}
+
 .grid {
   stroke: var(--grid);
   stroke-width: 1;

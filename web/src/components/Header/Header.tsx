@@ -6,13 +6,24 @@ import styles from "./Header.module.css";
 
 export interface HeaderProps {
   connection: "connecting" | "live" | "reconnecting";
-  portfolioPnl: number | null;
+  unrealized: number | null;
+  realized: number | null;
 }
 
-export default function Header({ connection, portfolioPnl }: HeaderProps) {
+function Score({ label, value }: { label: string; value: number | null }) {
+  const color = value == null ? undefined : value >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)";
+  return (
+    <span className={styles.score}>
+      <span className={styles.scoreKey}>{label}</span>
+      <span className={styles.scoreVal} style={color ? { color } : undefined}>
+        {value == null ? "-" : fmtSignedUsd(value, 2)}
+      </span>
+    </span>
+  );
+}
+
+export default function Header({ connection, unrealized, realized }: HeaderProps) {
   const live = connection === "live";
-  const pnlColor =
-    portfolioPnl == null ? undefined : portfolioPnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)";
 
   return (
     <div className={styles.header}>
@@ -25,12 +36,8 @@ export default function Header({ connection, portfolioPnl }: HeaderProps) {
         <span>{live ? "Live" : "Offline"}</span>
       </span>
       <span className={styles.spacer} />
-      <span className={styles.score}>
-        <span className={styles.scoreKey}>PNL</span>
-        <span className={styles.scoreVal} style={pnlColor ? { color: pnlColor } : undefined}>
-          {portfolioPnl == null ? "-" : fmtSignedUsd(portfolioPnl, 2)}
-        </span>
-      </span>
+      <Score label="unrealized" value={unrealized} />
+      <Score label="realized" value={realized} />
     </div>
   );
 }

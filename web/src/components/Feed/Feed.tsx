@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BlockEvent, Meta, PricePoint } from "@/lib/types";
-import { tapeFills } from "@/lib/fills";
+import type { BlockEvent, Meta } from "@/lib/types";
 import { fmtClock, fmtPrice, shortTx, txUrl } from "@/lib/format";
 import styles from "./Feed.module.css";
 
@@ -10,7 +9,6 @@ const ROW_H = 26;
 const MAX_ROWS = 40;
 
 type Kind = "buy" | "sell" | "hold" | "late";
-type Filter = "live" | "fills";
 
 function kindOf(event: BlockEvent): Kind {
   const d = event.decision;
@@ -37,7 +35,6 @@ const KIND_CLASS: Record<Kind, string> = {
 
 function wordOf(event: BlockEvent, kind: Kind): string {
   const d = event.decision;
-  if (event.fill && event.fill.size > 0) return "FILL";
   if (kind === "late") return "LATE";
   if (kind === "hold") return "HOLD";
   if (d?.intent === "close") return "CLOSE";
@@ -47,24 +44,19 @@ function wordOf(event: BlockEvent, kind: Kind): string {
   return "LATE";
 }
 
-function isLiveRow(event: BlockEvent): boolean {
-  return Boolean(event.fill && event.fill.size > 0) || Boolean(event.decision && !event.decision.late);
+function isCallRow(event: BlockEvent): boolean {
+  return Boolean(event.decision && !event.decision.late);
 }
 
 export default function Feed({
   events,
-  tape = [],
   meta,
-  onNeedMoreTape,
 }: {
   events: BlockEvent[];
-  tape?: PricePoint[];
   meta?: Meta | null;
-  onNeedMoreTape?: () => void;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [capacity, setCapacity] = useState(MAX_ROWS);
-  const [filter, setFilter] = useState<Filter>("live");
 
   useEffect(() => {
     const el = listRef.current;
@@ -82,64 +74,14 @@ export default function Feed({
     return () => ro.disconnect();
   }, []);
 
-  const callRows = useMemo(() => events.filter(isLiveRow), [events]);
-  const fillRows = useMemo(() => tapeFills(tape), [tape]);
-  const rows = filter === "fills" ? fillRows : callRows;
+  const callRows = useMemo(() => events.filter(isCallRow), [events]);
 
   return (
     <section className={styles.feed}>
-      <div className={styles.railHead}>
-        <span>TAPE</span>
-        <span className={styles.tabs}>
-          <button
-            type="button"
-            className={filter === "live" ? styles.tabOn : styles.tab}
-            onClick={() => setFilter("live")}
-            aria-pressed={filter === "live"}
-          >
-            CALLS
-          </button>
-          <span aria-hidden="true">|</span>
-          <button
-            type="button"
-            className={filter === "fills" ? styles.tabOn : styles.tab}
-            onClick={() => {
-              setFilter("fills");
-              onNeedMoreTape?.();
-            }}
-            aria-pressed={filter === "fills"}
-          >
-            FILLS
-          </button>
-        </span>
-      </div>
-      <div className={`${styles.list}${filter === "fills" ? ` ${styles.listScroll}` : ""}`} ref={listRef}>
-        {rows.length === 0 ? (
-          <div className={styles.empty}>{filter === "fills" ? "no fills yet" : "no calls yet"}</div>
-        ) : filter === "fills" ? (
-          [...fillRows].reverse().map((fill, i) => {
-            const kind = fill.side === "sell" ? "sell" : "buy";
-            const word = fill.dir === "open" ? "OPEN" : fill.dir === "close" ? "CLOSE" : fill.dir === "flip" ? "FLIP" : "FILL";
-            const detail = `${fill.dir ? `${fill.dir} ` : ""}${fmtSize(fill.size)} @ ${fmtPrice(fill.price)}`;
-            const rowClass = [styles.row, KIND_CLASS[kind], i === 0 ? styles.newest : "", styles.filled]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <div key={fill.key} className={rowClass}>
-                <span className={`${styles.cell} ${styles.time}`}>{fmtClock(fill.ts, true)}</span>
-                <span className={`${styles.cell} ${styles.word}`}>{word}</span>
-                <span className={`${styles.cell} ${styles.lat}`} />
-                <span className={`${styles.cell} ${styles.detail}`}>{detail}</span>
-                <span className={`${styles.cell} ${styles.tx}`}>
-                  {fill.hash ? (
-                    <a href={txUrl(fill.hash, meta?.explorerTx)} target="_blank" rel="noreferrer" title="Hyperliquid fill">
-                      {shortTx(fill.hash)}
-                    </a>
-                  ) : null}
-                </span>
-              </div>
-            );
-          })
+      <div className={styles.railHead}>CALLS</div>
+      <div className={styles.list} ref={listRef}>
+        {callRows.length === 0 ? (
+          <div className={styles.empty}>no calls yet</div>
         ) : (
           callRows.slice(-capacity).reverse().map((event, i) => {
             const kind = kindOf(event);

@@ -340,7 +340,7 @@ function parseMeta(raw: Record<string, unknown> | null): Meta | null {
     coin: typeof raw.coin === "string" ? raw.coin : "BTC",
     pair: typeof raw.pair === "string" ? raw.pair : "BTC-USD",
     explorerTx: typeof raw.explorerTx === "string" ? raw.explorerTx : "",
-    tickMs: typeof raw.tickMs === "number" ? raw.tickMs : 1000,
+    tickMs: typeof raw.tickMs === "number" ? raw.tickMs : 2000,
     sleeves: parseSleeves(raw.sleeves),
   };
 }
@@ -384,7 +384,7 @@ function snapshotFrom(data: unknown): {
 
 /**
  * Live sleeve feed. First paint comes from gzipped GET /snapshot.
- * SSE is lite after that. Longer chart windows pull /tape on demand.
+ * SSE is lite after that. The full candle tape hydrates right after the snapshot.
  */
 export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
   const [state, dispatch] = useReducer(reducer, {
@@ -449,13 +449,6 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       });
     };
 
-    const applySnapshot = (data: unknown) => {
-      const next = snapshotFrom(data);
-      if (!Object.keys(next.historyByCoin).length && !Object.keys(next.tapeByCoin).length && !next.meta) return;
-      haveSnapshot = true;
-      dispatch({ type: "snapshot", ...next });
-    };
-
     const hydrateTape = async () => {
       if (tapeStatus !== "idle") return;
       tapeStatus = "loading";
@@ -475,6 +468,14 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       }
     };
     loadTapeRef.current = hydrateTape;
+
+    const applySnapshot = (data: unknown) => {
+      const next = snapshotFrom(data);
+      if (!Object.keys(next.historyByCoin).length && !Object.keys(next.tapeByCoin).length && !next.meta) return;
+      haveSnapshot = true;
+      dispatch({ type: "snapshot", ...next });
+      if (!closed) void hydrateTape();
+    };
 
     let snapInflight: Promise<boolean> | null = null;
     const pullSnapshot = (): Promise<boolean> => {

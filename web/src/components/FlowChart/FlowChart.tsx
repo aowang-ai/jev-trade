@@ -15,7 +15,7 @@ const INTERVALS: { id: BarSize; label: string }[] = [
   { id: "1H", label: "1H" },
 ];
 
-const DEFAULT_INTERVAL: BarSize = "1s";
+const DEFAULT_INTERVAL: BarSize = "5m";
 const VISIBLE_BARS = 80;
 
 export default function FlowChart({
@@ -66,6 +66,11 @@ export default function FlowChart({
           : "var(--ink)";
   const lastPx = shown?.mid ?? model?.candles.at(-1)?.close;
   const coin = meta?.coin ?? "BTC";
+  const pos = shown?.position;
+  const entry =
+    pos && pos.side !== "flat" && pos.entryPrice != null && pos.entryPrice > 0
+      ? { price: pos.entryPrice, side: pos.side }
+      : null;
 
   return (
     <div className={styles.wrap}>
@@ -78,6 +83,7 @@ export default function FlowChart({
               key={coin}
               candles={model.candles}
               marks={model.marks}
+              entry={entry}
               rangeKey={`${coin}:${interval}`}
               visibleBars={VISIBLE_BARS}
               secondsVisible={interval === "1s"}
@@ -101,8 +107,9 @@ export default function FlowChart({
             <div className={styles.legend} aria-hidden="true">
               <span className={styles.legUp}>up</span>
               <span className={styles.legDown}>down</span>
-              <span className={styles.legBuy}>buy fill</span>
-              <span className={styles.legSell}>sell fill</span>
+              <span className={styles.legBuy}>buy</span>
+              <span className={styles.legSell}>sell</span>
+              <span className={styles.legEntry}>entry</span>
             </div>
           </>
         )}

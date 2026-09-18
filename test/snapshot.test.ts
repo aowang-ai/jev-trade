@@ -64,8 +64,8 @@ test("clipSnapshotTape keeps a 1s tail next to the 1m fallback", () => {
   ]);
 });
 
-test("default snapshot tape is a short 1m tail for the 15m window", () => {
-  const points: PricePoint[] = Array.from({ length: 40 }, (_, i) => ({
+test("default snapshot tape keeps a 1m tail for the first 5m window", () => {
+  const points: PricePoint[] = Array.from({ length: SNAPSHOT_MIDS + 40 }, (_, i) => ({
     ts: i + 1, mid: 10 + i, bar: "1m" as const,
   }));
   expect(clipSnapshotTape(points)).toHaveLength(SNAPSHOT_MIDS);

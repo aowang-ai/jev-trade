@@ -91,7 +91,7 @@ See [`.env.example`](.env.example). The ones that change behavior:
 | `AI_GATEWAY_API_KEY` | empty | Vercel AI Gateway key |
 | `PRIVATE_KEY` | empty | First coin. Empty is a dry run |
 | `DRY_RUN` | `false` | `true` simulates every sleeve |
-| `TICK_MS` | `1000` | Decision + requote cadence |
+| `TICK_MS` | `2000` | Decision + requote cadence |
 | `PRICE_MS` | `200` | Chart and mid prints. Does not call Jev |
 | `QUOTE_USD` | `40` | Quote notional per tick |
 | `CLOSE_SLIPPAGE_BPS` | `5` | How far an Ioc exit crosses the touch |

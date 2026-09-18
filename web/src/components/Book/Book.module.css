@@ -1,0 +1,141 @@
+.wrap {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 220px;
+  min-height: 180px;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.scope {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scopeBtn,
+.scopeOn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: 700 11px var(--font-mono), monospace;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.scopeBtn {
+  opacity: 0.4;
+}
+
+.scopeOn {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tab,
+.tabOn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: 700 12px var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.tab {
+  opacity: 0.45;
+}
+
+.tabOn {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 7px 12px;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  border-bottom: 1px solid var(--grid);
+}
+
+.table tbody tr {
+  cursor: pointer;
+}
+
+.table tbody tr:hover {
+  background: var(--panel-2);
+}
+
+.rowOn {
+  background: var(--panel-2);
+}
+
+.table a {
+  color: var(--link);
+}
+
+.empty {
+  padding: 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 899.98px) {
+  .wrap {
+    height: min(36vh, 260px);
+  }
+
+  .table th,
+  .table td {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}

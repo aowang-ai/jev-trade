@@ -1,7 +1,7 @@
 "use client";
 
 import type { BlockEvent, Meta } from "@/lib/types";
-import { displayCoin, fmtCall, fmtInt, fmtPct, fmtPrice, fmtSignedUsd, fmtUsd } from "@/lib/format";
+import { fmtCall, fmtPct } from "@/lib/format";
 import styles from "./DecisionPanel.module.css";
 
 export interface DecisionPanelProps {
@@ -38,7 +38,7 @@ function BarRow({ label, labelColor, active, value, fill, pct }: BarRowProps) {
   );
 }
 
-export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
+export default function DecisionPanel({ latest }: DecisionPanelProps) {
   const decision = latest?.decision ?? null;
   const late = decision ? decision.late : true;
   const held = decision?.intent === "hold";
@@ -60,12 +60,6 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
         ? "var(--sell-ink)"
         : "var(--buy-ink)"
       : "var(--late-ink)";
-
-  const pos = latest?.position;
-  const coin = meta?.coin ?? "BTC";
-  const posPnl = pos?.unrealizedUsd ?? 0;
-  const posColor = pos && pos.side !== "flat" ? (posPnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)") : undefined;
-  const totals = latest?.totals ?? null;
 
   return (
     <div className={styles.panel}>
@@ -122,30 +116,6 @@ export default function DecisionPanel({ latest, meta }: DecisionPanelProps) {
               fill={held ? "var(--ink-2)" : "var(--hold-cell)"}
               pct={pctOf(probs.hold)}
             />
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section}>
-        <div className={styles.railHead}>BOOK</div>
-        <div className={styles.body}>
-          <div className={styles.bookLine}>
-            {(pos?.side ?? "flat").toUpperCase()}
-            {pos && pos.side !== "flat" ? ` ${pos.size.toFixed(4)} ${displayCoin(coin)}` : ""}
-            {pos?.leverage != null ? ` ${pos.leverage}x` : ""}
-          </div>
-          {pos && pos.side !== "flat" && pos.entryPrice != null ? (
-            <div className={styles.bookSub}>entry {fmtPrice(pos.entryPrice)}</div>
-          ) : null}
-          {pos && pos.side !== "flat" ? (
-            <div className={styles.bookSub} style={{ color: posColor }}>
-              open {fmtSignedUsd(posPnl, 2)}
-            </div>
-          ) : null}
-          <div className={styles.stats}>
-            <span>fills {totals ? fmtInt(totals.fills) : "-"}</span>
-            <span>realized {totals ? fmtSignedUsd(totals.realizedUsd, 2) : "-"}</span>
-            <span>fees {totals ? fmtUsd(totals.gasUsd, 2) : "-"}</span>
           </div>
         </div>
       </section>
