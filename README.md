@@ -1,24 +1,40 @@
-# jev-trade
+# Jev Trade
 
-Live demo: [jev-trade.com](https://www.jev-trade.com/)
+[![Live desk](https://img.shields.io/badge/live-jev--trade.com-111)](https://www.jev-trade.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-111)](LICENSE)
 
-Jev reads Hyperliquid every tick. Five isolated sleeves (BTC, ETH, SOL, DOGE, BNB). Each sleeve has its own wallet and Jev call. Every tick Jev picks long or short, then open, close, or hold.
+I built a trading bot with Jev. Jev reads the Hyperliquid book every tick and answers buy, sell, or hold. The bot sends the order. Five coins, five wallets, real fills.
 
-An entry is a post-only Alo quote one tick inside the touch, so it earns the maker side and fills when a taker hits it. An exit is an Ioc that crosses the touch and fills on the spot: a resting exit only fills when the market moves your way, which caps winners at the spread and lets losers run. A hold sends no order and pulls any resting quote, so the book never carries a bid Jev no longer wants. Position and PnL come from Hyperliquid.
+**[Watch the live desk](https://www.jev-trade.com/)**
 
-This is a real trading bot. A live key on mainnet or testnet will send real orders. Start with a dry run.
+[![Jev Trade live desk](assets/desk.png)](https://www.jev-trade.com/)
+
+Jev makes the call. Hold is one of its answers, so a tick can end with no order. Position, balance, and PnL come from Hyperliquid.
+
+Based on [jev-trader](https://github.com/jarrodwatts/jev-trader) by Jarrod Watts (MIT). Venue is Hyperliquid, not Monad / Kuru.
+
+## What you are looking at
+
+- Five isolated sleeves: BTC, ETH, SOL, DOGE, BNB. Each has its own wallet and its own Jev call.
+- The left pane is the live book as candles. Green and red marks are fills. The entry line is the open position.
+- The right pane is the latest Jev call and the tape of every tick.
+- The table is Positions and Trades, the same split a futures desk uses.
+
+A live key on testnet or mainnet sends real orders. Start with a dry run.
+
+## How a tick works
+
+1. The bot reads the book.
+2. Jev picks long or short, then open, close, or hold.
+3. An entry is a post-only Alo quote one tick inside the touch, so it sits on the maker side until a taker hits it.
+4. An exit is an Ioc that crosses the touch and fills on the spot.
+5. Hold sends no order and pulls any resting quote Jev no longer wants.
 
 The bot is Bun on port 3000. The dashboard is Next in `web/` on port 3001. Keys, evaluate, and orders stay on the Bun process.
 
-Based on [jev-trader](https://github.com/jarrodwatts/jev-trader) by Jarrod Watts (MIT). Venue and product are Hyperliquid, not Monad / Kuru.
-
-## Requirements
-
-[Bun](https://bun.sh) 1.2 or newer.
-
 ## Dry run
 
-No `PRIVATE_KEY` means a dry run: real book, real decisions, simulated fills. Default `MODEL=mock` is a momentum stand-in and needs no API key.
+[Bun](https://bun.sh) 1.2 or newer. No `PRIVATE_KEY` means a dry run: real book, real decisions, simulated fills. Default `MODEL=mock` is a momentum stand-in and needs no API key.
 
 ```sh
 cp .env.example .env
@@ -94,7 +110,7 @@ See [`.env.example`](.env.example). The ones that change behavior:
 | `TICK_MS` | `2000` | Decision + requote cadence |
 | `PRICE_MS` | `200` | Chart and mid prints. Does not call Jev |
 | `QUOTE_USD` | `40` | Quote notional per tick |
-| `CLOSE_SLIPPAGE_BPS` | `5` | How far an Ioc exit crosses the touch |
+| `CLOSE_SLIPPAGE_BPS` | `5` | How far an exit crosses the touch |
 | `PORT` | `3000` | Bot SSE |
 
 ## Endpoints
@@ -110,6 +126,7 @@ See [`.env.example`](.env.example). The ones that change behavior:
 src/           Bun bot
 test/          bun tests
 web/           Next dashboard
+assets/        README shots of the live desk
 ```
 
 ## License
