@@ -2,11 +2,13 @@
 
 import type { BlockEvent, Meta } from "@/lib/types";
 import { fmtCall, fmtPct } from "@/lib/format";
+import { Bone } from "@/components/Skeleton/Skeleton";
 import styles from "./DecisionPanel.module.css";
 
 export interface DecisionPanelProps {
   latest: BlockEvent | null;
   meta?: Meta | null;
+  waiting?: boolean;
 }
 
 interface BarRowProps {
@@ -38,7 +40,38 @@ function BarRow({ label, labelColor, active, value, fill, pct }: BarRowProps) {
   );
 }
 
-export default function DecisionPanel({ latest }: DecisionPanelProps) {
+export default function DecisionPanel({ latest, waiting = false }: DecisionPanelProps) {
+  if (waiting && !latest) {
+    return (
+      <div className={styles.panel} aria-busy="true" aria-label="Loading call">
+        <section className={styles.section}>
+          <div className={styles.railHead}>CALL</div>
+          <div className={styles.body}>
+            <div className={styles.headline}>
+              <Bone w={72} h={22} />
+              <span className={styles.metaLine}>
+                <Bone w={40} h={10} />
+              </span>
+            </div>
+            <div className={styles.bars}>
+              {["long", "short", "open", "close", "hold"].map((label) => (
+                <div key={label} className={styles.row}>
+                  <span className={styles.label} style={{ opacity: 0.38 }}>
+                    {label}
+                  </span>
+                  <div className={styles.track} />
+                  <span className={styles.pct}>
+                    <Bone w={28} h={10} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const decision = latest?.decision ?? null;
   const late = decision ? decision.late : true;
   const held = decision?.intent === "hold";

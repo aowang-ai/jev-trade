@@ -8,7 +8,7 @@ import FlowChart from "@/components/FlowChart/FlowChart";
 import Header from "@/components/Header/Header";
 import SleeveStrip from "@/components/SleeveStrip/SleeveStrip";
 import { lastMeaningfulCall } from "@/lib/format";
-import { portfolioPnl } from "@/lib/pnl";
+import { portfolioBalance, portfolioPnl } from "@/lib/pnl";
 import { useFeed } from "@/lib/useFeed";
 import type { BlockEvent, Meta, SleeveFeed } from "@/lib/types";
 import styles from "./page.module.css";
@@ -64,12 +64,15 @@ export default function Page() {
   }, [coins, feed.byCoin]);
 
   const pnl = useMemo(() => portfolioPnl(latestByCoin), [latestByCoin]);
+  const balance = useMemo(() => portfolioBalance(latestByCoin), [latestByCoin]);
   const hasBooks = coins.some((c) => latestByCoin[c]);
+  const waiting = !feed.meta;
 
   return (
     <div className="shell">
       <Header
         connection={feed.connection}
+        balance={hasBooks ? balance : null}
         unrealized={hasBooks ? pnl.unrealized : null}
         realized={hasBooks ? pnl.realized : null}
       />
@@ -79,6 +82,7 @@ export default function Page() {
         lastCallByCoin={lastCallByCoin}
         selected={coin}
         onSelect={setPicked}
+        waiting={waiting}
       />
       <div className={styles.main}>
         <div className={styles.left}>
@@ -93,8 +97,8 @@ export default function Page() {
           </div>
         </div>
         <div className={styles.right}>
-          <DecisionPanel latest={sleeve.latest} meta={meta} />
-          <Feed events={sleeve.events} meta={meta} />
+          <DecisionPanel latest={sleeve.latest} meta={meta} waiting={waiting} />
+          <Feed events={sleeve.events} meta={meta} waiting={waiting} />
         </div>
       </div>
       <Book
@@ -105,6 +109,7 @@ export default function Page() {
         meta={meta}
         onSelect={setPicked}
         onNeedMoreTape={feed.loadTape}
+        waiting={waiting}
       />
     </div>
   );

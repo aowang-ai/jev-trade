@@ -33,6 +33,20 @@ export function portfolioPnl(latestByCoin: Record<string, BlockEvent | null | un
   return { unrealized, realized };
 }
 
+/** Sum of Hyperliquid account equity across sleeve wallets. */
+export function portfolioBalance(latestByCoin: Record<string, BlockEvent | null | undefined>): number | null {
+  let sum = 0;
+  let any = false;
+  for (const latest of Object.values(latestByCoin)) {
+    const v = latest?.accountValue;
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      any = true;
+    }
+  }
+  return any ? sum : null;
+}
+
 /** Unrealized as a percent of initial margin, when size, entry, and leverage exist. */
 export function roePct(pos: {
   side: string;

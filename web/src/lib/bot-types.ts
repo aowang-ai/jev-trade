@@ -116,6 +116,9 @@ export interface BlockEvent {
   resting: { bidSz: number; askSz: number };
   position: Position;
   totals: Totals;
+  /** Hyperliquid account equity for this sleeve wallet. */
+  accountValue?: number | null;
+  withdrawable?: number | null;
 }
 
 export interface SleeveMeta {

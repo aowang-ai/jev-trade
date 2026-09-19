@@ -1,0 +1,6 @@
+.bone {
+  display: inline-block;
+  flex: none;
+  background: var(--track);
+  vertical-align: middle;
+}

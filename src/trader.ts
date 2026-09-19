@@ -312,6 +312,8 @@ export class Trader {
         unrealizedSz: round(unrealized / book.mid, 8),
       },
       totals: { ...t, jevUsd: round(t.jevUsd, 6), gasSz: round(t.gasSz, 8), gasUsd: round(t.gasUsd, 6), realizedUsd: round(t.realizedUsd, 6), pnlUsd: round(t.pnlUsd, 6), pnlSz: round(t.pnlSz, 8), pnlPct: round(t.pnlPct, 4) },
+      accountValue: a && Number.isFinite(a.accountValue) ? round(a.accountValue, 2) : null,
+      withdrawable: a && Number.isFinite(a.withdrawable) ? round(a.withdrawable, 2) : null,
     };
     this.history.push(event);
     if (this.history.length > config.historySize) this.history.shift();

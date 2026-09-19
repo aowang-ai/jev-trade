@@ -5,6 +5,7 @@ import type { BlockEvent, Meta, PricePoint, SleeveMeta } from "@/lib/types";
 import { tapeFills } from "@/lib/fills";
 import { roePct } from "@/lib/pnl";
 import { displayCoin, fmtClock, fmtCoin, fmtPct, fmtPrice, fmtSignedUsd, shortTx, txUrl } from "@/lib/format";
+import { Bone } from "@/components/Skeleton/Skeleton";
 import styles from "./Book.module.css";
 
 type Tab = "positions" | "trades";
@@ -26,6 +27,7 @@ export default function Book({
   meta,
   onSelect,
   onNeedMoreTape,
+  waiting = false,
 }: {
   sleeves: SleeveMeta[];
   latestByCoin: Record<string, BlockEvent | null>;
@@ -34,6 +36,7 @@ export default function Book({
   meta?: Meta | null;
   onSelect: (coin: string) => void;
   onNeedMoreTape?: () => void;
+  waiting?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("positions");
   const [allMarkets, setAllMarkets] = useState(false);
@@ -110,7 +113,21 @@ export default function Book({
               </tr>
             </thead>
             <tbody>
-              {sleeves.map((sleeve) => {
+              {waiting && sleeves.length === 0
+                ? Array.from({ length: 5 }, (_, i) => (
+                    <tr key={i} className={styles.skelRow}>
+                      <td><Bone w={36} h={10} /></td>
+                      <td><Bone w={40} h={10} /></td>
+                      <td><Bone w={72} h={10} /></td>
+                      <td><Bone w={56} h={10} /></td>
+                      <td><Bone w={56} h={10} /></td>
+                      <td><Bone w={52} h={10} /></td>
+                      <td><Bone w={56} h={10} /></td>
+                      <td><Bone w={28} h={10} /></td>
+                      <td><Bone w={28} h={10} /></td>
+                    </tr>
+                  ))
+                : sleeves.map((sleeve) => {
                 const latest = latestByCoin[sleeve.coin] ?? null;
                 const pos = latest?.position;
                 const open = Boolean(pos && pos.side !== "flat" && pos.size > 0);
@@ -145,6 +162,35 @@ export default function Book({
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      ) : waiting && trades.length === 0 ? (
+        <div className={styles.scroller} aria-busy="true" aria-label="Loading trades">
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Market</th>
+                <th>Side</th>
+                <th>Action</th>
+                <th>Price</th>
+                <th>Size</th>
+                <th>Tx</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }, (_, i) => (
+                <tr key={i} className={styles.skelRow}>
+                  <td><Bone w={64} h={10} /></td>
+                  <td><Bone w={36} h={10} /></td>
+                  <td><Bone w={36} h={10} /></td>
+                  <td><Bone w={44} h={10} /></td>
+                  <td><Bone w={56} h={10} /></td>
+                  <td><Bone w={48} h={10} /></td>
+                  <td><Bone w={52} h={10} /></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

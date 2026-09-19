@@ -199,14 +199,47 @@
   font-weight: 700;
 }
 
-.empty {
+.skel {
   position: absolute;
   inset: 0;
+}
+
+.skelPrice {
+  position: absolute;
+  top: 14px;
+  left: 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 400 13px var(--font-mono), monospace;
-  color: var(--muted);
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skelSub {
+  display: flex;
+  gap: 12px;
+}
+
+.skelCandles {
+  position: absolute;
+  left: 16px;
+  right: 48px;
+  top: 76px;
+  bottom: 48px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.skelCandle,
+.skelCandleOn {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid var(--grid);
+  background: var(--bg);
+}
+
+.skelCandleOn {
+  background: var(--track);
+  border-color: var(--track);
 }
 
 .tools {
@@ -245,6 +278,18 @@
 }
 
 @media (max-width: 899.98px) {
+  .skelPrice {
+    top: 8px;
+    left: 8px;
+  }
+
+  .skelCandles {
+    top: 56px;
+    bottom: 12px;
+    left: 8px;
+    right: 8px;
+  }
+
   .tl {
     top: 8px;
     left: 8px;

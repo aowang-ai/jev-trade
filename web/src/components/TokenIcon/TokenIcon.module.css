@@ -2,6 +2,7 @@
   flex: none;
   display: block;
   border-radius: 999px;
+  object-fit: cover;
 }
 
 @media (max-width: 899.98px) {

@@ -3,6 +3,7 @@
 import type { BlockEvent, SleeveMeta } from "@/lib/types";
 import { displayCoin, fmtCoin, fmtPrice, fmtSignedUsd } from "@/lib/format";
 import TokenIcon from "@/components/TokenIcon/TokenIcon";
+import { Bone } from "@/components/Skeleton/Skeleton";
 import styles from "./SleeveStrip.module.css";
 
 export default function SleeveStrip({
@@ -11,14 +12,32 @@ export default function SleeveStrip({
   lastCallByCoin,
   selected,
   onSelect,
+  waiting = false,
 }: {
   sleeves: SleeveMeta[];
   latestByCoin: Record<string, BlockEvent | null>;
   lastCallByCoin: Record<string, string>;
   selected: string;
   onSelect: (coin: string) => void;
+  waiting?: boolean;
 }) {
-  if (!sleeves.length) return null;
+  if (!sleeves.length) {
+    if (!waiting) return null;
+    return (
+      <div className={styles.strip} aria-busy="true" aria-label="Loading markets" style={{ pointerEvents: "none" }}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className={styles.card}>
+            <span className={styles.top}>
+              <Bone w={52} h={12} />
+              <Bone w={44} h={10} />
+            </span>
+            <Bone w={72} h={18} />
+            <Bone w={88} h={10} />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className={styles.strip}>

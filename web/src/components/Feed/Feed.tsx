@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BlockEvent, Meta } from "@/lib/types";
 import { fmtClock, fmtPrice, shortTx, txUrl } from "@/lib/format";
+import { Bone } from "@/components/Skeleton/Skeleton";
 import styles from "./Feed.module.css";
 
 const ROW_H = 26;
@@ -51,9 +52,11 @@ function isCallRow(event: BlockEvent): boolean {
 export default function Feed({
   events,
   meta,
+  waiting = false,
 }: {
   events: BlockEvent[];
   meta?: Meta | null;
+  waiting?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [capacity, setCapacity] = useState(MAX_ROWS);
@@ -80,7 +83,26 @@ export default function Feed({
     <section className={styles.feed}>
       <div className={styles.railHead}>CALLS</div>
       <div className={styles.list} ref={listRef}>
-        {callRows.length === 0 ? (
+        {waiting && callRows.length === 0 ? (
+          <div aria-busy="true" aria-label="Loading calls">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className={styles.row}>
+                <span className={`${styles.cell} ${styles.time}`}>
+                  <Bone w={56} h={8} />
+                </span>
+                <span className={`${styles.cell} ${styles.word}`}>
+                  <Bone w={40} h={8} />
+                </span>
+                <span className={`${styles.cell} ${styles.lat}`}>
+                  <Bone w={28} h={8} />
+                </span>
+                <span className={`${styles.cell} ${styles.detail}`}>
+                  <Bone w={i % 2 ? 88 : 120} h={8} />
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : callRows.length === 0 ? (
           <div className={styles.empty}>no calls yet</div>
         ) : (
           callRows.slice(-capacity).reverse().map((event, i) => {

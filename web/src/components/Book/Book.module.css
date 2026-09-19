@@ -110,6 +110,10 @@
   cursor: pointer;
 }
 
+.skelRow {
+  cursor: default;
+}
+
 .table tbody tr:hover {
   background: var(--panel-2);
 }

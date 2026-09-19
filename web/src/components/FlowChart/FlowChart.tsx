@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { BlockEvent, Meta, PricePoint } from "@/lib/types";
 import { fmtCall, fmtPrice } from "@/lib/format";
 import { barsForView, fillMarks, type BarSize } from "@/lib/ohlc";
+import { Bone } from "@/components/Skeleton/Skeleton";
 import CandlePane from "./CandlePane";
 import styles from "./FlowChart.module.css";
+
+const SKELETON_CANDLES = [42, 48, 36, 55, 62, 50, 44, 70, 64, 58, 46, 40, 52, 68, 74, 60, 48, 38, 45, 56, 63, 71, 66, 54, 47, 41, 49, 57, 61, 53];
 
 const INTERVALS: { id: BarSize; label: string }[] = [
   { id: "1s", label: "1s" },
@@ -76,7 +79,24 @@ export default function FlowChart({
     <div className={styles.wrap}>
       <div className={styles.panel} role="img" aria-label="Price candles. Use the interval buttons.">
         {!model ? (
-          <div className={styles.empty}>waiting for prices</div>
+          <div className={styles.skel} aria-busy="true" aria-label="Loading prices">
+            <div className={styles.skelPrice}>
+              <Bone w={108} h={28} />
+              <span className={styles.skelSub}>
+                <Bone w={64} h={10} />
+                <Bone w={28} h={10} />
+              </span>
+            </div>
+            <div className={styles.skelCandles}>
+              {SKELETON_CANDLES.map((h, i) => (
+                <span
+                  key={i}
+                  className={i % 4 === 1 ? styles.skelCandleOn : styles.skelCandle}
+                  style={{ height: `${h}%` }}
+                />
+              ))}
+            </div>
+          </div>
         ) : (
           <>
             <CandlePane

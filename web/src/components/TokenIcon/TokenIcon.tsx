@@ -4,9 +4,27 @@ import { useId } from "react";
 import { displayCoin } from "@/lib/format";
 import styles from "./TokenIcon.module.css";
 
+const OFFICIAL: Record<string, string> = {
+  DOGE: "/tokens/doge.png",
+  BNB: "/tokens/bnb.png",
+};
+
 export default function TokenIcon({ coin, size = 16 }: { coin: string; size?: number }) {
   const gid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const id = displayCoin(coin).toUpperCase();
+  const src = OFFICIAL[id];
+  if (src) {
+    return (
+      <img
+        className={styles.icon}
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+      />
+    );
+  }
   return (
     <svg
       className={styles.icon}
@@ -67,26 +85,6 @@ function mark(id: string, gid: string) {
               <stop offset="1" stopColor="#DC1FFF" />
             </linearGradient>
           </defs>
-        </>
-      );
-    case "DOGE":
-      return (
-        <>
-          <circle cx="16" cy="16" r="16" fill="#C2A633" />
-          <path
-            fill="#FFF"
-            d="M16.4 8.2h-5.2v15.6h5.5c3.9 0 6.5-2 6.5-5.4 0-2.1-1.1-3.7-2.8-4.4 1.4-.8 2.3-2.2 2.3-4 0-2.8-2.3-4.8-6.3-4.8zm-.4 6.3h-2.3V10.7h2.4c1.8 0 2.8.8 2.8 1.9 0 1.3-1.1 1.9-2.9 1.9zm.4 7h-2.7v-4.5h2.6c2 0 3.1.8 3.1 2.2s-1.1 2.3-3 2.3z"
-          />
-        </>
-      );
-    case "BNB":
-      return (
-        <>
-          <circle cx="16" cy="16" r="16" fill="#F3BA2F" />
-          <path
-            fill="#FFF"
-            d="M12.1 14.5 16 10.6l3.9 3.9 2.3-2.3L16 6l-6.2 6.2zm-2.2 3.8L12.2 16l-2.3-2.3L7.6 16zm6.1 6.1 3.9-3.9-2.3-2.3-1.6 1.6-1.6-1.6-2.3 2.3zm6.1-6.1L22.4 16l2.3-2.3L27 16zM16 17.8l1.6-1.6 2.3 2.3L16 22.4l-3.9-3.9 2.3-2.3z"
-          />
         </>
       );
     default:
