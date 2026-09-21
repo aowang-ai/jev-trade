@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import type { BlockEvent, Meta, PricePoint, SleeveMeta } from "@/lib/types";
-import { tapeFills } from "@/lib/fills";
+import { closedLots, tapeFills } from "@/lib/fills";
 import { roePct } from "@/lib/pnl";
-import { displayCoin, fmtClock, fmtCoin, fmtPct, fmtPrice, fmtSignedUsd, shortTx, txUrl } from "@/lib/format";
+import { displayCoin, fmtClock, fmtCoin, fmtPct, fmtPrice, fmtSignedUsd, fmtUsd, shortTx, txUrl } from "@/lib/format";
 import { Bone } from "@/components/Skeleton/Skeleton";
 import styles from "./Book.module.css";
 
-type Tab = "positions" | "trades";
+type Tab = "positions" | "trades" | "history";
 
 const TRADE_CAP = 200;
 
@@ -53,6 +53,18 @@ export default function Book({
     return rows.slice(0, TRADE_CAP);
   }, [allMarkets, selected, sleeves, tapeByCoin]);
 
+  const history = useMemo(() => {
+    const rows = [];
+    for (const sleeve of sleeves) {
+      if (!allMarkets && sleeve.coin !== selected) continue;
+      for (const lot of closedLots(tapeFills(tapeByCoin[sleeve.coin] ?? []))) {
+        rows.push({ ...lot, coin: sleeve.coin });
+      }
+    }
+    rows.sort((a, b) => b.ts - a.ts);
+    return rows.slice(0, TRADE_CAP);
+  }, [allMarkets, selected, sleeves, tapeByCoin]);
+
   return (
     <section className={styles.wrap}>
       <div className={styles.tabs} role="tablist" aria-label="Account book">
@@ -77,7 +89,19 @@ export default function Book({
         >
           Trades
         </button>
-        {tab === "trades" ? (
+        <button
+          type="button"
+          className={tab === "history" ? styles.tabOn : styles.tab}
+          role="tab"
+          aria-selected={tab === "history"}
+          onClick={() => {
+            setTab("history");
+            onNeedMoreTape?.();
+          }}
+        >
+          History
+        </button>
+        {tab === "trades" || tab === "history" ? (
           <span className={styles.scope}>
             <button
               type="button"
@@ -165,6 +189,76 @@ export default function Book({
             </tbody>
           </table>
         </div>
+      ) : tab === "history" ? (
+        waiting && history.length === 0 ? (
+          <div className={styles.scroller} aria-busy="true" aria-label="Loading history">
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Market</th>
+                  <th>Side</th>
+                  <th>Size</th>
+                  <th>Entry</th>
+                  <th>Exit</th>
+                  <th>PnL</th>
+                  <th>Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 6 }, (_, i) => (
+                  <tr key={i} className={styles.skelRow}>
+                    <td><Bone w={64} h={10} /></td>
+                    <td><Bone w={36} h={10} /></td>
+                    <td><Bone w={40} h={10} /></td>
+                    <td><Bone w={48} h={10} /></td>
+                    <td><Bone w={56} h={10} /></td>
+                    <td><Bone w={56} h={10} /></td>
+                    <td><Bone w={56} h={10} /></td>
+                    <td><Bone w={40} h={10} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : history.length === 0 ? (
+          <div className={styles.empty}>no closed lots yet</div>
+        ) : (
+          <div className={styles.scroller}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Market</th>
+                  <th>Side</th>
+                  <th>Size</th>
+                  <th>Entry</th>
+                  <th>Exit</th>
+                  <th>PnL</th>
+                  <th>Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((lot) => {
+                  const sideColor = lot.side === "long" ? "var(--buy-ink)" : "var(--sell-ink)";
+                  const pnlColor = lot.pnl >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)";
+                  return (
+                    <tr key={`${lot.coin}|${lot.key}`} onClick={() => onSelect(lot.coin)}>
+                      <td>{fmtClock(lot.ts, true)}</td>
+                      <td>{displayCoin(lot.coin)}</td>
+                      <td style={{ color: sideColor }}>{lot.side.toUpperCase()}</td>
+                      <td>{fmtSize(lot.size)}</td>
+                      <td>{lot.entry != null ? fmtPrice(lot.entry) : "-"}</td>
+                      <td>{fmtPrice(lot.exit)}</td>
+                      <td style={{ color: pnlColor }}>{fmtSignedUsd(lot.pnl, 2)}</td>
+                      <td>{lot.fee ? fmtUsd(lot.fee, 2) : "-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : waiting && trades.length === 0 ? (
         <div className={styles.scroller} aria-busy="true" aria-label="Loading trades">
           <table className={styles.table}>

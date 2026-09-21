@@ -12,6 +12,7 @@ export interface MakerFill {
   updatedSize: number;
   side: Side;
   feeUsd?: number;
+  closedPnl?: number;
   dir?: Fill["dir"];
 }
 
@@ -96,7 +97,18 @@ export function takeLiveFills(orders: Map<number, Resting>, raw: MakerFill[]): (
     const remaining = f.updatedSize >= 0 ? f.updatedSize : Math.max(0, (o?.size ?? 0) - f.size);
     if (remaining <= 0) orders.delete(f.orderId);
     else if (o) o.size = remaining;
-    out.push({ side: f.side, size: f.size, price: f.price, txHash: f.txHash, orderId: f.orderId, simulated: false, block: f.block, feeUsd: f.feeUsd, dir: f.dir });
+    out.push({
+      side: f.side,
+      size: f.size,
+      price: f.price,
+      txHash: f.txHash,
+      orderId: f.orderId,
+      simulated: false,
+      block: f.block,
+      feeUsd: f.feeUsd,
+      closedPnl: f.closedPnl,
+      dir: f.dir,
+    });
   }
   return out;
 }

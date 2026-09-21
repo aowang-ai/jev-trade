@@ -28,6 +28,8 @@ export type VenueFill = {
   size: number;
   dir?: NonNullable<PricePoint["fill"]>["dir"];
   hash?: string;
+  closedPnl?: number;
+  feeUsd?: number;
 };
 
 export function fillKey(f: VenueFill): string {
@@ -168,7 +170,15 @@ export class VenueChart {
       pts.push({
         ts: f.ts,
         mid: f.price,
-        fill: { side: f.side, price: f.price, size: f.size, dir: f.dir, hash: f.hash },
+        fill: {
+          side: f.side,
+          price: f.price,
+          size: f.size,
+          dir: f.dir,
+          hash: f.hash,
+          closedPnl: f.closedPnl,
+          feeUsd: f.feeUsd,
+        },
       });
     }
     pts.sort((a, b) => a.ts - b.ts || (a.fill ? 1 : 0) - (b.fill ? 1 : 0) || (a.bar === "15m" ? -1 : 1));

@@ -122,7 +122,18 @@ export class Market {
       fill.side === "B" || fill.side === "buy" ? "buy" : fill.side === "A" || fill.side === "sell" ? "sell" : null;
     if (side && Number.isFinite(ts) && ts > 0 && Number.isFinite(price) && price > 0) {
       const hash = typeof fill.hash === "string" && fill.hash ? fill.hash : undefined;
-      const print = { ts, side, price, size: Number.isFinite(size) ? size : 0, dir: fillDir(fill.dir), hash };
+      const closedPnl = Number(fill.closedPnl);
+      const feeUsd = Number(fill.fee);
+      const print = {
+        ts,
+        side,
+        price,
+        size: Number.isFinite(size) ? size : 0,
+        dir: fillDir(fill.dir),
+        hash,
+        ...(Number.isFinite(closedPnl) ? { closedPnl } : {}),
+        ...(Number.isFinite(feeUsd) ? { feeUsd } : {}),
+      };
       this.fillPrints.push(print);
       if (this.feed.chart.addFill(print)) this.onVenueFill?.(print);
     }

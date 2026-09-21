@@ -23,7 +23,7 @@ test("VenueChart keeps 1m and 15m candles plus venue fills", () => {
   chart.upsertCandle({ t: 2000, o: "101", h: "103", l: "100", c: "102", i: "1m" });
   chart.upsertCandle({ t: 1000, o: "100", h: "102", l: "99", c: "101", i: "1m" });
   chart.upsertCandle({ t: 15, o: "90", h: "110", l: "80", c: "100", i: "15m" });
-  expect(chart.addFill({ ts: 1500, side: "buy", price: 100.5, size: 0.01, dir: "open", hash: "0xabc" })).toBe(true);
+  expect(chart.addFill({ ts: 1500, side: "buy", price: 100.5, size: 0.01, dir: "open", hash: "0xabc", closedPnl: -0.2, feeUsd: 0.01 })).toBe(true);
   expect(chart.addFill({ ts: 1500, side: "buy", price: 100.5, size: 0.01, dir: "open" })).toBe(false);
   const pts = chart.points;
   expect(pts.map((p) => [p.ts, p.bar, p.close ?? p.mid, p.fill?.side, p.fill?.hash])).toEqual([
@@ -32,6 +32,7 @@ test("VenueChart keeps 1m and 15m candles plus venue fills", () => {
     [1500, undefined, 100.5, "buy", "0xabc"],
     [2000, "1m", 102, undefined, undefined],
   ]);
+  expect(pts[2]?.fill).toMatchObject({ closedPnl: -0.2, feeUsd: 0.01 });
   expect(pts[1]).toMatchObject({ open: 100, high: 102, low: 99, close: 101 });
   expect(fillKey({ ts: 1, side: "sell", price: 2, size: 3 })).toBe("1|sell|2|3");
   expect(chart.closes(2)).toEqual([101, 102]);

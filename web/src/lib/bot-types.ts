@@ -42,6 +42,7 @@ export interface Fill {
   orderId: number;
   simulated: boolean;
   feeUsd?: number;
+  closedPnl?: number;
   dir?: "open" | "close" | "flip";
 }
 
@@ -55,7 +56,15 @@ export interface PricePoint {
   close?: number;
   bar?: "1s" | "1m" | "15m";
   block?: number;
-  fill?: { side: Side; price: number; size: number; dir?: "open" | "close" | "flip"; hash?: string };
+  fill?: {
+    side: Side;
+    price: number;
+    size: number;
+    dir?: "open" | "close" | "flip";
+    hash?: string;
+    closedPnl?: number;
+    feeUsd?: number;
+  };
 }
 
 export interface Decision {

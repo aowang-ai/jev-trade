@@ -151,6 +151,7 @@ export class Feed {
           updatedSize: -1,
           side: f.side === "B" ? "buy" : "sell",
           feeUsd: Number(f.fee) || 0,
+          closedPnl: Number.isFinite(Number(f.closedPnl)) ? Number(f.closedPnl) : undefined,
           dir: fillDir(f.dir),
         });
       }
