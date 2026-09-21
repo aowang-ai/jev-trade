@@ -50,7 +50,8 @@ export default function Header({ connection, balance, unrealized, realized }: He
     <div className={styles.header}>
       <span className={styles.brandLockup}>
         <Logo size={20} />
-        <span className={styles.brand}>Jev Trade</span>
+        <h1 className={styles.brand}>Jev Trade</h1>
+        <p className={styles.tagline}>Live Jev trading bot</p>
         <span className={styles.links}>
           <a
             className={styles.link}

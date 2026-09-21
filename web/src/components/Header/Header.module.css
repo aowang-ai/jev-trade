@@ -15,12 +15,24 @@
 }
 
 .brand {
+  display: inline;
   font-family: var(--font-mono), "IBM Plex Mono", monospace;
   font-weight: 700;
   font-size: 14px;
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--ink);
+  white-space: nowrap;
+}
+
+.tagline {
+  margin: 0;
+  font-family: var(--font-mono), "IBM Plex Mono", monospace;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -118,6 +130,10 @@
     font-size: 13px;
   }
 
+  .tagline {
+    display: none;
+  }
+
   .status {
     font-size: 11px;
     gap: 5px;
@@ -157,6 +173,6 @@
 
 @media (max-width: 359px) {
   .brand {
-    display: none;
+    font-size: 12px;
   }
 }

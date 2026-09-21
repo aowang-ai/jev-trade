@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   turbopack: { root: path.resolve(__dirname) },
   // Agent rules live in the repo-root CLAUDE.md. Do not emit web/AGENTS.md.
   agentRules: false,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
 };
 
 export default nextConfig;

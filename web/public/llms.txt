@@ -1,0 +1,16 @@
+# Jev Trade
+
+> Jev Trade is a live Jev trading bot on crypto and other assets.
+
+Jev reads the Hyperliquid book every tick and answers buy, sell, or hold. The bot sends the order. Five isolated sleeves: BTC, ETH, SOL, DOGE, and BNB. Each sleeve has its own wallet and its own Jev call.
+
+Venue is Hyperliquid. The public desk at https://www.jev-trade.com/ is a live testnet demo.
+
+Jev is TypeSafe's trading model. Jev Trade is the live desk and execution layer: it feeds Jev the book and places real orders from Jev's answer. Official TypeSafe is the default Jev API. Vercel AI Gateway with `typesafe-ai/jev` is also supported.
+
+## Links
+
+- [Live desk](https://www.jev-trade.com/): public demo of the five books
+- [GitHub](https://github.com/aowang-ai/jev-trade): source for the Bun bot and Next desk
+- [TypeSafe Jev](https://docs.typesafe.ai/): the model that decides buy, sell, or hold
+- [README](https://raw.githubusercontent.com/aowang-ai/jev-trade/main/README.md): how a tick works and how to run it

@@ -9,14 +9,48 @@ const plex = IBM_Plex_Mono({
   display: "swap",
 });
 
-const title = "Jev Trade";
-const description = "Jev live on Hyperliquid. Five isolated books. One model every tick.";
+const site = "https://www.jev-trade.com";
+const title = "Jev Trade | Live Jev trading bot on crypto and other assets";
+const description =
+  "Jev Trade is live Jev trading: a bot that reads the book every tick and trades BTC, ETH, SOL, DOGE, and BNB.";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      name: "Jev Trade",
+      url: `${site}/`,
+      description,
+    },
+    {
+      "@type": "WebApplication",
+      name: "Jev Trade",
+      url: `${site}/`,
+      applicationCategory: "FinanceApplication",
+      operatingSystem: "Web",
+      description,
+      isAccessibleForFree: true,
+      codeRepository: "https://github.com/aowang-ai/jev-trade",
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      name: "jev-trade",
+      url: "https://github.com/aowang-ai/jev-trade",
+      codeRepository: "https://github.com/aowang-ai/jev-trade",
+      programmingLanguage: "TypeScript",
+      license: "https://opensource.org/licenses/MIT",
+    },
+  ],
+};
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.jev-trade.com"),
+  metadataBase: new URL(site),
   title,
   description,
-  applicationName: title,
+  applicationName: "Jev Trade",
+  alternates: { canonical: "/" },
+  robots: { index: true, follow: true },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -28,7 +62,7 @@ export const metadata: Metadata = {
     title,
     description,
     url: "/",
-    siteName: title,
+    siteName: "Jev Trade",
     type: "website",
     images: [{ url: "/og.png", width: 1200, height: 630, alt: title }],
   },
@@ -50,7 +84,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={plex.variable}>
-      <body>{children}</body>
+      <head>
+        <link rel="describedby" href="https://www.jev-trade.com/llms.txt" />
+      </head>
+      <body>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        {children}
+      </body>
     </html>
   );
 }
