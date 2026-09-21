@@ -57,7 +57,7 @@ export class Trader {
     this.totals.blocks++;
     if (this.totals.blocks % 5 === 0) this.market.refresh().catch(() => {});
     if (this.busy) {
-      this.totals.lateBlocks++;
+      this.markLate(block, this.lastBook);
       return;
     }
     this.busy = true;
@@ -73,7 +73,7 @@ export class Trader {
       this.syncFromVenue();
       const timing = { readMs: Math.round(readMs), loopMs: 0 };
       if (Date.now() < this.jevPauseUntil) {
-        this.totals.lateBlocks++;
+        this.markLate(block, book);
         return;
       }
       try {
@@ -98,7 +98,7 @@ export class Trader {
         } else {
           console.error(`tick ${block}:`, msg);
         }
-        this.totals.lateBlocks++;
+        this.markLate(block, book, timing);
       }
     } catch (e) {
       console.error(`tick ${block}:`, (e as Error).message);
@@ -126,7 +126,6 @@ export class Trader {
 
   /** Jev held. Pull the standing quote so an order it no longer wants cannot get hit. */
   private enqueueStandDown() {
-    if (!this.orders.size) return;
     const seq = ++this.sendSeq;
     this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
       if (seq !== this.sendSeq) return;
@@ -134,6 +133,11 @@ export class Trader {
       if (seq !== this.sendSeq) return;
       this.orders.clear();
     });
+  }
+
+  private markLate(block: number, book: Book | null, timing?: Timing) {
+    this.totals.lateBlocks++;
+    if (book) this.emit(block, book, null, null, true, timing);
   }
 
   private applyPosted(block: number, quote: Quote) {

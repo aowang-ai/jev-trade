@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { jevQuestions, marketFacing, type TradeState } from "../src/model";
+import { decideFromJevAnswers, jevQuestions, marketFacing, type TradeState } from "../src/model";
 
 function fixture(side: TradeState["position"]["side"]): TradeState {
   return {
@@ -114,4 +114,31 @@ test("evaluate state is the book and live position, not the wallet scoreboard", 
   const open = marketFacing(fixture("long"));
   expect(open.position.unrealizedUsd).toBe(-1.25);
   expect(JSON.stringify(open).toLowerCase()).not.toContain("pnlusd");
+});
+
+test("a short answer keeps its case and still sells", () => {
+  for (const choice of ["SHORT", "Short", " short "]) {
+    const d = decideFromJevAnswers(
+      { bias: { choice }, intent: { choice: "open" }, leverage: { choice: "2" } },
+      "flat",
+      40,
+      1,
+    );
+    expect(d.bias).toBe("short");
+    expect(d.intent).toBe("open");
+    expect(d.action).toBe("sell");
+  }
+});
+
+test("an unrecognised bias stands down instead of opening long", () => {
+  const d = decideFromJevAnswers(
+    { bias: { choice: "up" }, intent: { choice: "open" }, leverage: { choice: "5" } },
+    "flat",
+    40,
+    1,
+  );
+  expect(d.intent).toBe("hold");
+  expect(d.action).toBe("hold");
+  expect(d.probabilities.long).toBe(d.probabilities.short);
+  expect(d.probabilities.long).toBeLessThan(1);
 });
