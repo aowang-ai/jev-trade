@@ -235,27 +235,71 @@ function pack(o: Packed): ModelDecision {
   };
 }
 
+function normChoice(raw: unknown): string {
+  return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+}
+
 function pick<T extends string>(raw: unknown, allowed: readonly T[], fallback: T): T {
-  return allowed.includes(raw as T) ? (raw as T) : fallback;
+  const n = normChoice(raw);
+  return (allowed as readonly string[]).includes(n) ? n as T : fallback;
+}
+
+function pickKnown<T extends string>(raw: unknown, allowed: readonly T[]): T | null {
+  const n = normChoice(raw);
+  return (allowed as readonly string[]).includes(n) ? n as T : null;
 }
 
 /** Normalize a choice answer over `keys`. Missing probabilities fall back to the pick. */
 function choiceProbs(answer: ChoiceAnswer | undefined, keys: readonly string[]): Record<string, number> {
+  const choice = normChoice(answer?.choice);
   const p = answer?.probabilities ?? {};
-  const raw = keys.map((k) => Math.max(0, p[k] ?? (answer?.choice === k ? 1 : 0)));
+  const raw = keys.map((k) => Math.max(0, p[k] ?? (choice === k ? 1 : 0)));
   const sum = raw.reduce((a, b) => a + b, 0);
   const out: Record<string, number> = {};
   if (sum <= 0) {
-    const at = keys.indexOf(answer?.choice ?? "");
-    keys.forEach((k, i) => (out[k] = i === (at >= 0 ? at : 0) ? 1 : 0));
+    const at = keys.indexOf(choice);
+    if (at < 0) {
+      keys.forEach((k) => { out[k] = 1 / keys.length; });
+      return out;
+    }
+    keys.forEach((k, i) => { out[k] = i === at ? 1 : 0; });
     return out;
   }
-  keys.forEach((k, i) => (out[k] = raw[i]! / sum));
+  keys.forEach((k, i) => { out[k] = raw[i]! / sum; });
   return out;
 }
 
 type ChoiceAnswer = { choice?: string; probabilities?: Record<string, number> };
 type JevAnswers = { bias?: ChoiceAnswer; intent?: ChoiceAnswer; leverage?: ChoiceAnswer };
+
+/** Map a Jev answer set onto one tick. A side we cannot read is a hold, not a long. */
+export function decideFromJevAnswers(
+  answers: JevAnswers,
+  positionSide: "long" | "short" | "flat",
+  maxLeverage: number,
+  currentLeverage: number | null,
+  latencyMs = 0,
+  inputTokens = 0,
+): ModelDecision {
+  const flat = positionSide === "flat";
+  const biasPick = pickKnown(answers.bias?.choice, ["long", "short"] as const);
+  const choices = flat ? (["open", "hold"] as const) : (["open", "close", "hold"] as const);
+  const intent = liveIntent(positionSide, biasPick ? pick(answers.intent?.choice, choices, "hold") : "hold");
+  const dir = choiceProbs(answers.bias, ["long", "short"]);
+  const act = choiceProbs(answers.intent, choices);
+  return pack({
+    intent,
+    bias: biasPick ?? "long",
+    leverage: parseLeverage(answers.leverage?.choice, maxLeverage, currentLeverage ?? 1),
+    longP: dir.long!,
+    shortP: dir.short!,
+    openP: act.open!,
+    closeP: act.close ?? 0,
+    holdP: act.hold!,
+    latencyMs,
+    inputTokens,
+  });
+}
 
 let typesafe: TypeSafeClient | undefined;
 
@@ -312,25 +356,14 @@ export class JevModel implements Model {
   async decide(state: TradeState): Promise<ModelDecision> {
     const t0 = performance.now();
     const r = await callJev(state);
-    const flat = state.position.side === "flat";
-    const bias = pick(r.answers.bias?.choice, ["long", "short"] as const, "long");
-    const choices = flat ? (["open", "hold"] as const) : (["open", "close", "hold"] as const);
-    const intent = liveIntent(state.position.side, pick(r.answers.intent?.choice, choices, "hold"));
-    const dir = choiceProbs(r.answers.bias, ["long", "short"]);
-    const act = choiceProbs(r.answers.intent, choices);
-    const leverage = parseLeverage(r.answers.leverage?.choice, state.maxLeverage, state.position.leverage ?? 1);
-    return pack({
-      intent,
-      bias,
-      leverage,
-      longP: dir.long!,
-      shortP: dir.short!,
-      openP: act.open!,
-      closeP: act.close ?? 0,
-      holdP: act.hold!,
-      latencyMs: performance.now() - t0,
-      inputTokens: r.inputTokens,
-    });
+    return decideFromJevAnswers(
+      r.answers,
+      state.position.side,
+      state.maxLeverage,
+      state.position.leverage,
+      performance.now() - t0,
+      r.inputTokens,
+    );
   }
 }
 
