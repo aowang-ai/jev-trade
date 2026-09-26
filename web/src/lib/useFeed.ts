@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { applyLiveMid } from "./ohlc";
+import { mergeTape, shouldHydrateTape, snapshotTape, type TapeStatus } from "./tape-state";
 import type { BlockEvent, ConnectionState, FeedState, Fill, Meta, PricePoint, Quote, SleeveFeed } from "./types";
 
 const CAP = 1000;
@@ -240,8 +241,7 @@ function reducer(state: State, action: Action): State {
       for (const [coin, tape] of Object.entries(action.tapeByCoin)) {
         if (!tape.length) continue;
         const s = next.sleeves[coin] ?? emptySleeve();
-        if (tape.length <= (s.tape?.length ?? 0)) continue;
-        next = replaceSleeve(next, coin, { ...s, tape: tape.length > TAPE_CAP ? tape.slice(tape.length - TAPE_CAP) : tape });
+        next = replaceSleeve(next, coin, { ...s, tape: mergeTape(s.tape, tape, TAPE_CAP) });
       }
       return next;
     }
@@ -256,8 +256,15 @@ function reducer(state: State, action: Action): State {
         ...(action.meta?.sleeves.map((s) => s.coin) ?? []),
       ]);
       const sleeves: Record<string, SleeveMem> = {};
+      const sameSession = state.meta != null && action.meta != null && state.meta.startedAt === action.meta.startedAt;
       for (const coin of coins) {
-        sleeves[coin] = fromHistory(action.historyByCoin[coin] ?? [], action.tapeByCoin[coin] ?? []);
+        const tape = snapshotTape(
+          state.sleeves[coin]?.tape ?? [],
+          action.tapeByCoin[coin] ?? [],
+          sameSession,
+          TAPE_CAP,
+        );
+        sleeves[coin] = fromHistory(action.historyByCoin[coin] ?? [], tape);
       }
       return {
         meta: action.meta ?? state.meta,
@@ -402,7 +409,8 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
     let closed = false;
     let attempt = 0;
     let haveSnapshot = false;
-    let tapeStatus: "idle" | "loading" | "done" = "idle";
+    let tapeStatus: TapeStatus = "idle";
+    let tapeRefreshPending = false;
     let es: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let staleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -449,32 +457,40 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       });
     };
 
-    const hydrateTape = async () => {
-      if (tapeStatus !== "idle") return;
-      tapeStatus = "loading";
-      try {
-        const r = await fetch(`${base}/tape`);
-        if (!r.ok) {
-          tapeStatus = "idle";
-          return;
-        }
-        const raw = await r.json();
-        const tapeByCoin: Record<string, PricePoint[]> = {};
-        for (const [coin, rows] of Object.entries(mapByCoin(raw))) tapeByCoin[coin] = asTape(rows);
-        if (Object.keys(tapeByCoin).length) dispatch({ type: "tapes", tapeByCoin });
-        tapeStatus = "done";
-      } catch {
-        tapeStatus = "idle";
+    const hydrateTape = async (refresh = false) => {
+      if (tapeStatus === "loading") {
+        if (refresh) tapeRefreshPending = true;
+        return;
       }
+      if (!shouldHydrateTape(tapeStatus, refresh)) return;
+      do {
+        tapeRefreshPending = false;
+        tapeStatus = "loading";
+        try {
+          const r = await fetch(`${base}/tape`);
+          if (!r.ok) {
+            tapeStatus = "idle";
+          } else {
+            const raw = await r.json();
+            const tapeByCoin: Record<string, PricePoint[]> = {};
+            for (const [coin, rows] of Object.entries(mapByCoin(raw))) tapeByCoin[coin] = asTape(rows);
+            if (Object.keys(tapeByCoin).length) dispatch({ type: "tapes", tapeByCoin });
+            tapeStatus = "done";
+          }
+        } catch {
+          tapeStatus = "idle";
+        }
+      } while (tapeRefreshPending && !closed);
     };
     loadTapeRef.current = hydrateTape;
 
     const applySnapshot = (data: unknown) => {
       const next = snapshotFrom(data);
       if (!Object.keys(next.historyByCoin).length && !Object.keys(next.tapeByCoin).length && !next.meta) return;
+      const refreshTape = tapeStatus !== "idle";
       haveSnapshot = true;
       dispatch({ type: "snapshot", ...next });
-      if (!closed) void hydrateTape();
+      if (!closed) void hydrateTape(refreshTape);
     };
 
     let snapInflight: Promise<boolean> | null = null;
