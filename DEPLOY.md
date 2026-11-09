@@ -14,13 +14,41 @@ Use **workers.dev** first. Do not point `jev-trade.com` at Cloudflare until both
 ## Prerequisites
 
 - [Bun](https://bun.sh) 1.2+ (local dev and CI)
-- [Docker](https://docs.docker.com/get-docker/) running on the machine that runs `wrangler deploy` (Wrangler builds the bot image)
 - Cloudflare **Workers Paid** (Containers require it)
 - `CLOUDFLARE_API_TOKEN` or `wrangler login` with deploy permissions on the account
+- **Docker** only when you deploy the bot **from your laptop**. Wrangler must build the Container image locally in that case. If you use GitHub Actions (below), the runner has Docker and your machine does not need it.
 
 ```sh
 export CLOUDFLARE_API_TOKEN=...   # if not using wrangler login
 ```
+
+## GitHub Actions (recommended without local Docker)
+
+Workflow: [`.github/workflows/deploy-cloudflare.yml`](.github/workflows/deploy-cloudflare.yml).
+
+### Repo secrets (Settings → Secrets and variables → Actions)
+
+| Secret | Required | Value |
+| --- | --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Yes | API token with Workers + Containers deploy on account `a1d7542d06e5119c859e11e7755043c2` |
+| `CLOUDFLARE_ACCOUNT_ID` | Yes (for CI) | `a1d7542d06e5119c859e11e7755043c2` |
+
+`wrangler.jsonc` files also set `account_id`; the secret keeps CI explicit and matches what Wrangler reads from `CLOUDFLARE_ACCOUNT_ID`.
+
+### When it runs
+
+- **Push to `main`** when `cloudflare/`, `web/`, `Dockerfile`, `src/`, or this workflow file changes
+- **`workflow_dispatch`** on any branch (pick a branch in the Actions UI, including a PR branch, to deploy from that ref)
+
+### Jobs
+
+1. **`deploy-bot`**: `cd cloudflare/bot && bun install && bun run deploy` (builds the image on `ubuntu-latest` with Docker)
+2. **`deploy-web`**: after the bot job, sets `NEXT_PUBLIC_API_URL=https://jev-trade-bot.wangaotongji.workers.dev` and runs `cd web && bun run cf:deploy`
+
+Live workers.dev URLs for this account:
+
+- Bot: `https://jev-trade-bot.wangaotongji.workers.dev`
+- Dashboard: `https://jev-trade-web.wangaotongji.workers.dev`
 
 ## 1. Bot (Container + Worker)
 
@@ -130,4 +158,4 @@ web/
 
 - **502 from bot Worker**: Container still starting, or Docker was not running during `wrangler deploy`. Check Workers → Containers logs.
 - **Dashboard shows no feed**: Wrong `NEXT_PUBLIC_API_URL` at build time; rebuild web after fixing.
-- **`wrangler deploy` fails on image build**: Start Docker; image must be `linux/amd64` (see repo `Dockerfile`).
+- **`wrangler deploy` fails on image build**: Start Docker locally, or use the **deploy-cloudflare** GitHub Action instead. Image must be `linux/amd64` (see repo `Dockerfile`).
