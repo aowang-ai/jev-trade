@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { portfolioBalance, portfolioPnl, roePct, sleevePnl } from "../web/src/lib/pnl";
+import { portfolioBalance, portfolioBalanceView, portfolioPnl, roePct, sleevePnl } from "../web/src/lib/pnl";
 import type { BlockEvent } from "../src/types";
 
 function event(partial: Partial<BlockEvent> & Pick<BlockEvent, "coin" | "position" | "totals">): BlockEvent {
@@ -40,6 +40,16 @@ test("sleevePnl splits open mark pnl from closed fills", () => {
   expect(portfolioPnl({ BTC: open, ETH: flat })).toEqual({ unrealized: 2.5, realized: -1 });
   expect(portfolioBalance({ BTC: { ...open, accountValue: 120.4 }, ETH: { ...flat, accountValue: 80 } })).toBeCloseTo(200.4);
   expect(portfolioBalance({ BTC: open, ETH: flat })).toBeNull();
+  const live = {
+    BTC: { coin: "BTC", status: "ok" as const, network: "hyperliquid-testnet", wallet: "0x1", accountValue: 139.81, withdrawable: 139, updatedAt: 1 },
+    ETH: { coin: "ETH", status: "ok" as const, network: "hyperliquid-testnet", wallet: "0x2", accountValue: 145.73, withdrawable: 140, updatedAt: 1 },
+  };
+  const view = portfolioBalanceView({ BTC: open, ETH: flat }, live);
+  expect(view.value).toBeCloseTo(285.54);
+  expect(view.hasLive).toBe(true);
+  expect(portfolioBalanceView({ BTC: open }, { BTC: { ...live.BTC, status: "pending", accountValue: null } }).pending).toBe(true);
+  expect(portfolioBalanceView({ BTC: open }, { BTC: { ...live.BTC, status: "unavailable", accountValue: null } }).unavailable).toBe(true);
+  expect(portfolioBalanceView({ BTC: open }, { BTC: { ...live.BTC, status: "ok", accountValue: 0 } }).value).toBe(0);
 });
 
 test("roePct is unrealized over initial margin", () => {

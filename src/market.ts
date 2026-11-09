@@ -34,6 +34,7 @@ export class Market {
   private fills = new FillPnlBook();
   readonly fillPrints: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"]; hash?: string }[] = [];
   onVenueFill: ((fill: { ts: number; side: Side; price: number; size: number; dir?: Fill["dir"]; hash?: string }) => void) | null = null;
+  onAccountRefresh: (() => void) | null = null;
 
   get chartPoints() {
     return this.feed.chart.points;
@@ -41,6 +42,10 @@ export class Market {
 
   get assetCtx() {
     return this.feed.assetCtx;
+  }
+
+  get priceBook() {
+    return this.feed.book;
   }
 
   candleCloses(limit = 80) {
@@ -129,6 +134,7 @@ export class Market {
   applyClearinghouse(state: ClearinghouseLike) {
     this.account = this.fills.apply(accountFromClearinghouse(state, this.coin, this.account));
     this.margin.usdc = this.account.withdrawable;
+    this.onAccountRefresh?.();
   }
 
   noteFill(fill: FillPnlLike) {
