@@ -5,7 +5,8 @@ node_modules
 cloudflare/bot/node_modules
 cloudflare/bot/.wrangler
 cloudflare/bot/.dev.vars
-data/
+data/*
+!data/.gitkeep
 docs/
 .wallets.json
 .cursor/

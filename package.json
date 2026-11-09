@@ -18,6 +18,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.888.0",
     "@ai-sdk/gateway": "^4.0.85",
     "@nktkas/hyperliquid": "^0.33.3",
     "@typesafe-ai/sdk": "^0.6.0",
@@ -30,6 +31,7 @@
     "dev:web": "bun --cwd web run dev",
     "test": "bun test test",
     "cf:bot:check": "bun --cwd cloudflare/bot run check",
-    "cf:web:build": "bun --cwd web run cf:build"
+    "cf:web:build": "bun --cwd web run cf:build",
+    "import:history": "bun run scripts/import-migration-archive.ts"
   }
 }

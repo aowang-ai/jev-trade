@@ -149,6 +149,16 @@ export interface Meta {
   explorerTx: string;
   tickMs: number;
   sleeves: SleeveMeta[];
+  /** Historical replay without trading or mock decision ticks. */
+  restorationMode?: boolean;
+  executionEnabled?: boolean;
+  /** e.g. hyperliquid-testnet */
+  networkLabel?: string;
+  /** Latest imported block event timestamp (ms), when known. */
+  historicalThroughTs?: number | null;
+  /** Key under historyByCoin for legacy events.jsonl rows (no top-level coin). */
+  legacyUnscopedCoin?: string;
+  legacyUnscopedCount?: number;
 }
 
 export interface Timing {

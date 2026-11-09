@@ -108,6 +108,7 @@ export class Trader {
   }
 
   private enqueueQuote(block: number, decision: ModelDecision, plan: QuotePlan, book: Book) {
+    if (!config.executionEnabled) return;
     const seq = ++this.sendSeq;
     this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
       if (seq !== this.sendSeq) return;
@@ -126,6 +127,7 @@ export class Trader {
 
   /** Jev held. Pull the standing quote so an order it no longer wants cannot get hit. */
   private enqueueStandDown() {
+    if (!config.executionEnabled) return;
     const seq = ++this.sendSeq;
     this.exchangeTail = this.exchangeTail.catch(() => {}).then(async () => {
       if (seq !== this.sendSeq) return;
@@ -177,7 +179,11 @@ export class Trader {
   private harvest() {
     if (!this.trades) return;
     const prints = this.trades.drainPrints();
-    const fills = this.market.wallet ? takeLiveFills(this.orders, this.trades.drainFills()) : takeSimFills(this.orders, prints);
+    const fills = this.market.signingEnabled
+      ? takeLiveFills(this.orders, this.trades.drainFills())
+      : config.executionEnabled
+        ? takeSimFills(this.orders, prints)
+        : [];
     if (!fills.length) return;
     const byBlock = new Map<number, Fill[]>();
     for (const f of fills) {

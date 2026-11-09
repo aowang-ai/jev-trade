@@ -1,5 +1,8 @@
-import { config } from "./config";
+import { config, assertRestorationSafety } from "./config";
 import { Feed } from "./feed";
+import { HistoryStore } from "./history-store";
+import { LEGACY_UNSCOPED_COIN } from "./history-import";
+import { loadHistoryBundle } from "./r2-history";
 import { Market } from "./market";
 import { createModel } from "./model";
 import { loadSleeves } from "./sleeves";
@@ -7,10 +10,25 @@ import { startServer, type SleeveView } from "./server";
 import { Trader } from "./trader";
 import type { BlockEvent, Fill, Meta, Quote, Timing } from "./types";
 
+assertRestorationSafety();
+
+const historyStore = new HistoryStore();
+
+async function bootstrapHistory() {
+  await historyStore.loadFromDisk();
+  if (config.historyAutoLoadR2Key) {
+    const raw = await loadHistoryBundle(config.historyAutoLoadR2Key);
+    if (raw) historyStore.importBundle(raw);
+  }
+}
+
+await bootstrapHistory();
+
 const specs = loadSleeves();
 if (!specs.length) throw new Error("no sleeves");
 
 const views: SleeveView[] = [];
+const markets: Market[] = [];
 const first = specs[0]!;
 const meta: Meta = {
   model: config.model,
@@ -24,6 +42,12 @@ const meta: Meta = {
   explorerTx: config.explorerTx,
   tickMs: config.tickMs,
   sleeves: [],
+  restorationMode: config.restorationMode,
+  executionEnabled: config.executionEnabled,
+  networkLabel: config.networkLabel,
+  historicalThroughTs: historyStore.historicalThrough(),
+  legacyUnscopedCoin: LEGACY_UNSCOPED_COIN,
+  legacyUnscopedCount: historyStore.stats().coins[LEGACY_UNSCOPED_COIN]?.events ?? 0,
 };
 
 let server: ReturnType<typeof startServer> | undefined;
@@ -45,6 +69,7 @@ for (const spec of specs) {
       };
       await feed.connect();
       const market = new Market(feed, spec);
+      markets.push(market);
       await market.init();
       const trader = new Trader(
         market,
@@ -65,7 +90,11 @@ for (const spec of specs) {
           dir: p.dir,
         }, p.ts);
       };
-      views.push({ coin: spec.coin, history: () => trader.history, tape: () => trader.tape });
+      views.push({
+        coin: spec.coin,
+        history: () => historyStore.eventsFor(spec.coin, trader.history),
+        tape: () => historyStore.tapeFor(spec.coin, trader.tape),
+      });
       meta.sleeves.push({ coin: spec.coin, pair: spec.pair, label: spec.label, wallet: market.address });
       if (spec === first) {
         meta.wallet = market.address;
@@ -73,8 +102,16 @@ for (const spec of specs) {
         meta.pair = spec.pair;
         meta.market = spec.pair;
       }
-      starters.push(() => feed.start((tick) => trader.onBlock(tick)));
-      console.log(`sleeve ${spec.label} ${spec.pair} ${config.dryRun || !spec.privateKey ? "DRY RUN" : market.address}`);
+      if (config.executionEnabled) {
+        starters.push(() => feed.start((tick) => trader.onBlock(tick)));
+      }
+      const addr = market.address;
+      const label = config.restorationMode
+        ? `RESTORATION ${addr ?? "no watch address"}`
+        : config.dryRun || !spec.privateKey
+          ? "DRY RUN"
+          : String(addr);
+      console.log(`sleeve ${spec.label} ${spec.pair} ${label}`);
       lastErr = null;
       break;
     } catch (e) {
@@ -87,10 +124,30 @@ for (const spec of specs) {
 
 if (!views.length) throw new Error("no sleeves started");
 
-server = startServer(meta, views);
+meta.historicalThroughTs = historyStore.historicalThrough();
+
+server = startServer(meta, views, {
+  history: historyStore,
+  onHistoryImported: async () => {
+    meta.historicalThroughTs = historyStore.historicalThrough();
+    meta.legacyUnscopedCount = historyStore.stats().coins[LEGACY_UNSCOPED_COIN]?.events ?? 0;
+    server?.invalidateSnapshot();
+  },
+});
+
 for (const start of starters) start();
 
-console.log(`jev-trade ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model}${config.model === "jev" ? ` ${config.jevProvider}` : ""} tick ${config.tickMs}ms price ${config.priceMs}ms quote $${config.quoteUsd} :${config.port}`);
+if (config.restorationMode || !config.executionEnabled) {
+  setInterval(() => {
+    for (const m of markets) m.refresh().catch(() => {});
+  }, 30_000);
+}
+
+console.log(
+  `jev-trade ${meta.sleeves.map((s) => s.label).join(" ")} model=${meta.model}${config.model === "jev" ? ` ${config.jevProvider}` : ""}` +
+  `${config.restorationMode ? " RESTORATION" : ""} tick ${config.executionEnabled ? config.tickMs : 0}ms price ${config.priceMs}ms quote $${config.quoteUsd} :${config.port}` +
+  `${historyStore.coinKeys().length ? ` history ${historyStore.coinKeys().join(" ")}` : ""}`,
+);
 
 function onEvent(coin: string) {
   return (e: BlockEvent, t?: Timing) => {
@@ -98,7 +155,6 @@ function onEvent(coin: string) {
     if (e.decision && !e.decision.late) {
       const d = e.decision;
       const q = e.quote;
-      // A hold applies neither bias nor leverage, and an exit skips the leverage write.
       const lev = d.intent === "open" && d.leverage != null ? ` ${d.leverage}x` : "";
       const call = d.intent === "hold" ? "hold" : d.intent && d.bias ? `${d.intent} ${d.bias}${lev}` : d.action;
       const order = q && ` ${q.side.toUpperCase()} ${q.size} @ ${q.price}${q.taker ? " cross" : ""}${q.reduceOnly ? " reduce" : ""}${q.unchanged ? " unchanged" : q.status === "sim" ? " (sim)" : ` ${q.status}`}`;

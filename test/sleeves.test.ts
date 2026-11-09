@@ -38,6 +38,8 @@ test("loadSleeves reads WALLETS_JSON for non-first coins", () => {
   const prevCoins = process.env.HL_COINS;
   const prevJson = process.env.WALLETS_JSON;
   const prevKey = process.env.PRIVATE_KEY;
+  const prevRestore = process.env.RESTORATION_MODE;
+  delete process.env.RESTORATION_MODE;
   const btc = `0x${"11".repeat(32)}`;
   const eth = `0x${"22".repeat(32)}`;
   process.env.HL_COINS = "TESTBTC,TESTETH";
@@ -54,5 +56,7 @@ test("loadSleeves reads WALLETS_JSON for non-first coins", () => {
     else process.env.WALLETS_JSON = prevJson;
     if (prevKey == null) delete process.env.PRIVATE_KEY;
     else process.env.PRIVATE_KEY = prevKey;
+    if (prevRestore == null) delete process.env.RESTORATION_MODE;
+    else process.env.RESTORATION_MODE = prevRestore;
   }
 });
