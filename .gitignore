@@ -1,5 +1,10 @@
 node_modules
 .env
+.open-next
+.wrangler
+cloudflare/bot/node_modules
+cloudflare/bot/.wrangler
+cloudflare/bot/.dev.vars
 data/
 docs/
 .wallets.json

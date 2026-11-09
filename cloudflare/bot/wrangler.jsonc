@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jev-trade-bot",
+  "account_id": "a1d7542d06e5119c859e11e7755043c2",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "MODEL": "mock",
+    "HL_TESTNET": "true",
+    "HL_COINS": "BTC,ETH,SOL,DOGE,BNB",
+    "TICK_MS": "2000",
+    "PRICE_MS": "200",
+    "PORT": "3000"
+  },
+  "containers": [
+    {
+      "class_name": "JevBotContainer",
+      "image": "../../Dockerfile",
+      "max_instances": 1,
+      "instance_type": "standard-1"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "JevBotContainer",
+        "name": "JEV_BOT"
+      }
+    ]
+  },
+  "exports": {
+    "JevBotContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "upload_source_maps": true
+}
