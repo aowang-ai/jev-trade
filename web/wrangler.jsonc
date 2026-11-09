@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jev-trade-web",
+  "account_id": "a1d7542d06e5119c859e11e7755043c2",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-08",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "jev-trade-web"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true
+}

@@ -1,5 +1,8 @@
 node_modules
 .next
+.open-next
+.wrangler
+cloudflare-env.d.ts
 .env*
 !.env.example
 next-env.d.ts

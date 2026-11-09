@@ -1,0 +1,47 @@
+name: deploy-cloudflare
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/**"
+      - "web/**"
+      - "Dockerfile"
+      - "src/**"
+      - ".github/workflows/deploy-cloudflare.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Deploy bot Worker and Container
+        working-directory: cloudflare/bot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          bun install --frozen-lockfile
+          bun run deploy
+
+  deploy-web:
+    needs: deploy-bot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Deploy dashboard (OpenNext)
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NEXT_PUBLIC_API_URL: https://jev-trade-bot.wangaotongji.workers.dev
+        run: |
+          bun install --frozen-lockfile
+          bun run cf:deploy

@@ -28,6 +28,8 @@
     "start": "bun run src/index.ts",
     "dev": "bun --watch run src/index.ts",
     "dev:web": "bun --cwd web run dev",
-    "test": "bun test test"
+    "test": "bun test test",
+    "cf:bot:check": "bun --cwd cloudflare/bot run check",
+    "cf:web:build": "bun --cwd web run cf:build"
   }
 }

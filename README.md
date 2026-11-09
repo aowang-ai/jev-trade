@@ -120,6 +120,10 @@ See [`.env.example`](.env.example). The ones that change behavior:
 - `GET /tape` all-time mid series plus fill marks per coin
 - `GET /events` SSE: `snapshot` on connect (`historyByCoin`, `tapeByCoin`), then `block`, `quote`, `fill` keyed by coin
 
+## Cloudflare
+
+Production deploy steps (Container bot + OpenNext dashboard) are in [DEPLOY.md](DEPLOY.md). Default Cloudflare config is dry-run safe (`MODEL=mock`, no keys in repo).
+
 ## Layout
 
 ```
