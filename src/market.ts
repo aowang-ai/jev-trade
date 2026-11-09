@@ -15,6 +15,7 @@ type QuoteBase = Required<Pick<Quote, "side" | "reduceOnly" | "capped" | "taker"
 /** Hyperliquid perp: Alo post-only quotes, modify when the side stays put. */
 export class Market {
   readonly wallet: PrivateKeyAccount | null;
+  readonly watchAddress: `0x${string}` | null;
   readonly coin: string;
   readonly pair: string;
   readonly label: string;
@@ -50,14 +51,24 @@ export class Market {
     this.coin = sleeve.coin;
     this.pair = sleeve.pair;
     this.label = sleeve.label;
-    this.wallet = config.dryRun || !sleeve.privateKey ? null : privateKeyToAccount(sleeve.privateKey);
+    this.watchAddress = sleeve.watchAddress ?? null;
+    const restoration = process.env.RESTORATION_MODE === "true";
+    const executionEnabled = !restoration && process.env.EXECUTION_ENABLED !== "false";
+    if (restoration && sleeve.privateKey) {
+      throw new Error(`RESTORATION_MODE rejects private key on ${sleeve.coin}`);
+    }
+    this.wallet = executionEnabled && sleeve.privateKey ? privateKeyToAccount(sleeve.privateKey) : null;
     const transport = new HttpTransport({ isTestnet: config.hlTestnet });
     this.info = new InfoClient({ transport });
     if (this.wallet) this.ex = new ExchangeClient({ transport, wallet: this.wallet });
   }
 
   get address() {
-    return this.wallet?.address ?? null;
+    return this.wallet?.address ?? this.watchAddress;
+  }
+
+  get signingEnabled() {
+    return !!this.ex;
   }
 
   quoteSize(mid: number): number {
@@ -72,21 +83,29 @@ export class Market {
     if (assetId == null || szDecimals == null) throw new Error(`unknown Hyperliquid coin ${this.coin}`);
     this.assetId = assetId;
     this.szDecimals = szDecimals;
-    if (this.wallet && this.ex) {
+    const addr = this.address;
+    if (addr) {
       this.feed.onClearinghouse = (state) => this.applyClearinghouse(state);
       this.feed.onUserPnl = (fill) => this.noteFill(fill);
-      this.feed.watchUser(this.wallet.address);
-      this.feed.onGone = (oid) => {
-        if (this.lastOid === oid) this.forgetResting();
-      };
-      await this.clearOpen();
+      this.feed.watchUser(addr);
+      if (this.wallet && this.ex) {
+        this.feed.onGone = (oid) => {
+          if (this.lastOid === oid) this.forgetResting();
+        };
+        await this.clearOpen();
+      }
     }
     await this.loadMaxLeverage();
     await this.refresh();
     if (this.address) await this.seedFills();
     const net = config.hlTestnet ? "testnet" : "mainnet";
-    console.log(`hyperliquid · ${this.pair} ${net} · ${this.coin} asset ${this.assetId} · szDecimals ${this.szDecimals} · max ${this.maxLeverage}x · ${config.dryRun ? "DRY RUN" : `wallet ${this.address}`}`);
-    if (this.wallet) {
+    const mode = config.restorationMode
+      ? "RESTORATION read-only"
+      : config.dryRun
+        ? "DRY RUN"
+        : `wallet ${this.address}`;
+    console.log(`hyperliquid · ${this.pair} ${net} · ${this.coin} asset ${this.assetId} · szDecimals ${this.szDecimals} · max ${this.maxLeverage}x · ${mode}`);
+    if (this.address) {
       const a = this.account;
       const side = !a || !a.positionSz ? "flat" : a.positionSz > 0 ? "long" : "short";
       const size = a ? Math.abs(a.positionSz) : 0;

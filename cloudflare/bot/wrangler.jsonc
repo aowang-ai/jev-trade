@@ -10,11 +10,17 @@
   },
   "vars": {
     "MODEL": "mock",
+    "DRY_RUN": "true",
+    "RESTORATION_MODE": "true",
     "HL_TESTNET": "true",
     "HL_COINS": "BTC,ETH,SOL,DOGE,BNB",
     "TICK_MS": "2000",
     "PRICE_MS": "200",
-    "PORT": "3000"
+    "PORT": "3000",
+    "HISTORY_DATA_DIR": "data/history",
+    "HISTORY_R2_BUCKET": "jev-trade-mig-archive",
+    "HISTORY_AUTO_LOAD_R2_KEY": "mig1/runtime-history-bundle.json",
+    "HISTORY_PERSIST_R2_KEY": "mig1/runtime-history-bundle.json"
   },
   "containers": [
     {

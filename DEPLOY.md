@@ -32,6 +32,8 @@ Workflow: [`.github/workflows/deploy-cloudflare.yml`](.github/workflows/deploy-c
 | --- | --- | --- |
 | `CLOUDFLARE_API_TOKEN` | Yes | API token with Workers + Containers deploy on account `a1d7542d06e5119c859e11e7755043c2` |
 | `CLOUDFLARE_ACCOUNT_ID` | Yes (for CI) | `a1d7542d06e5119c859e11e7755043c2` |
+| `HISTORY_IMPORT_SECRET` | Yes (restoration) | Bot import auth; set as Wrangler secret on `jev-trade-bot`, not in repo |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Optional | Container env for R2 persistence (see RESTORE.md) |
 
 `wrangler.jsonc` files also set `account_id`; the secret keeps CI explicit and matches what Wrangler reads from `CLOUDFLARE_ACCOUNT_ID`.
 
@@ -43,12 +45,14 @@ Workflow: [`.github/workflows/deploy-cloudflare.yml`](.github/workflows/deploy-c
 ### Jobs
 
 1. **`deploy-bot`**: `cd cloudflare/bot && bun install && bun run deploy` (builds the image on `ubuntu-latest` with Docker)
-2. **`deploy-web`**: after the bot job, sets `NEXT_PUBLIC_API_URL=https://jev-trade-bot.wangaotongji.workers.dev` and runs `cd web && bun run cf:deploy`
+2. **`deploy-web`**: after the bot job, sets `NEXT_PUBLIC_API_URL=https://bot.jev-trade.com` and runs `cd web && bun run cf:deploy`
 
 Live workers.dev URLs for this account:
 
-- Bot: `https://jev-trade-bot.wangaotongji.workers.dev`
-- Dashboard: `https://jev-trade-web.wangaotongji.workers.dev`
+- Bot: `https://bot.jev-trade.com` (workers.dev: `https://jev-trade-bot.wangaotongji.workers.dev`)
+- Dashboard: `https://www.jev-trade.com` (workers.dev: `https://jev-trade-web.wangaotongji.workers.dev`)
+
+Historical restoration (no trading): see [RESTORE.md](RESTORE.md).
 
 ## 1. Bot (Container + Worker)
 
@@ -115,7 +119,7 @@ Config in `web/`. **`NEXT_PUBLIC_API_URL` must be set at build time** to the bot
 ```sh
 cd web
 bun install
-export NEXT_PUBLIC_API_URL=https://jev-trade-bot.<workers-subdomain>.workers.dev
+export NEXT_PUBLIC_API_URL=https://bot.jev-trade.com
 bun run cf:deploy
 ```
 
@@ -128,7 +132,7 @@ Open it in a browser and confirm the feed connects (browser devtools: EventSourc
 Local preview on Workers runtime:
 
 ```sh
-export NEXT_PUBLIC_API_URL=https://jev-trade-bot.<workers-subdomain>.workers.dev
+export NEXT_PUBLIC_API_URL=https://bot.jev-trade.com
 bun run cf:preview
 ```
 

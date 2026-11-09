@@ -5,6 +5,7 @@ import { applyLiveMid } from "./ohlc";
 import type { BlockEvent, ConnectionState, FeedState, Fill, Meta, PricePoint, Quote, SleeveFeed } from "./types";
 
 const CAP = 1000;
+const RESTORATION_CAP = 50_000;
 const TAPE_CAP = 200_000;
 const BACKOFF_MIN = 1000;
 const BACKOFF_MAX = 10_000;
@@ -34,6 +35,7 @@ interface State {
 
 type Action =
   | { type: "snapshot"; meta: Meta | null; historyByCoin: Record<string, BlockEvent[]>; tapeByCoin: Record<string, PricePoint[]> }
+  | { type: "history"; historyByCoin: Record<string, BlockEvent[]> }
   | { type: "block"; event: BlockEvent }
   | { type: "fill"; coin: string; block: number; fill: Fill; ts?: number }
   | { type: "quote"; coin: string; block: number; quote: Quote }
@@ -140,8 +142,13 @@ function replaceSleeve(state: State, coin: string, next: SleeveMem): State {
   return { ...state, sleeves: { ...state.sleeves, [coin]: viewOf(next) } };
 }
 
-function fromHistory(history: BlockEvent[], tape: PricePoint[]): SleeveMem {
-  const events = history.length > CAP ? history.slice(history.length - CAP) : history;
+function eventCap(meta: Meta | null | undefined) {
+  return meta?.restorationMode ? RESTORATION_CAP : CAP;
+}
+
+function fromHistory(history: BlockEvent[], tape: PricePoint[], meta?: Meta | null): SleeveMem {
+  const cap = eventCap(meta);
+  const events = history.length > cap ? history.slice(history.length - cap) : history;
   let latSum = 0;
   let latCount = 0;
   for (const e of events) {
@@ -165,7 +172,7 @@ function fromHistory(history: BlockEvent[], tape: PricePoint[]): SleeveMem {
   });
 }
 
-function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
+function applyBlock(s: SleeveMem, ev: BlockEvent, meta: Meta | null): SleeveMem {
   const prev = s.events;
   const last = prev.length ? prev[prev.length - 1] : null;
 
@@ -204,8 +211,9 @@ function applyBlock(s: SleeveMem, ev: BlockEvent): SleeveMem {
     latCount++;
   }
   let events = prev.concat(ev);
-  if (events.length > CAP) {
-    const drop = events.length - CAP;
+  const cap = eventCap(meta);
+  if (events.length > cap) {
+    const drop = events.length - cap;
     for (let i = 0; i < drop; i++) {
       const l = latencyOf(events[i]!);
       if (l !== null) {
@@ -257,7 +265,7 @@ function reducer(state: State, action: Action): State {
       ]);
       const sleeves: Record<string, SleeveMem> = {};
       for (const coin of coins) {
-        sleeves[coin] = fromHistory(action.historyByCoin[coin] ?? [], action.tapeByCoin[coin] ?? []);
+        sleeves[coin] = fromHistory(action.historyByCoin[coin] ?? [], action.tapeByCoin[coin] ?? [], action.meta);
       }
       return {
         meta: action.meta ?? state.meta,
@@ -266,12 +274,23 @@ function reducer(state: State, action: Action): State {
       };
     }
 
+    case "history": {
+      let next = state;
+      for (const [coin, history] of Object.entries(action.historyByCoin)) {
+        if (!history.length) continue;
+        const s = next.sleeves[coin] ?? emptySleeve();
+        const merged = fromHistory(history, s.tape, next.meta);
+        next = replaceSleeve(next, coin, { ...merged, tape: s.tape.length > merged.tape.length ? s.tape : merged.tape });
+      }
+      return next;
+    }
+
     case "block": {
       const ev = action.event;
       if (!ev || typeof ev.block !== "number") return state;
       const coin = ev.coin || state.meta?.coin;
       if (!coin) return state;
-      return replaceSleeve(state, coin, applyBlock(state.sleeves[coin] ?? emptySleeve(), ev));
+      return replaceSleeve(state, coin, applyBlock(state.sleeves[coin] ?? emptySleeve(), ev, state.meta));
     }
 
     case "fill": {
@@ -342,6 +361,11 @@ function parseMeta(raw: Record<string, unknown> | null): Meta | null {
     explorerTx: typeof raw.explorerTx === "string" ? raw.explorerTx : "",
     tickMs: typeof raw.tickMs === "number" ? raw.tickMs : 2000,
     sleeves: parseSleeves(raw.sleeves),
+    restorationMode: raw.restorationMode === true,
+    executionEnabled: typeof raw.executionEnabled === "boolean" ? raw.executionEnabled : undefined,
+    networkLabel: typeof raw.networkLabel === "string" ? raw.networkLabel : undefined,
+    historicalThroughTs:
+      typeof raw.historicalThroughTs === "number" ? raw.historicalThroughTs : raw.historicalThroughTs === null ? null : undefined,
   };
 }
 
@@ -449,6 +473,19 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       });
     };
 
+    const hydrateHistory = async (m: Meta | null) => {
+      if (!m?.restorationMode) return;
+      try {
+        const r = await fetch(`${base}/history`);
+        if (!r.ok) return;
+        const raw = await r.json();
+        const historyByCoin = mapByCoin(raw);
+        if (Object.keys(historyByCoin).length) dispatch({ type: "history", historyByCoin: historyByCoin as Record<string, BlockEvent[]> });
+      } catch {
+        // keep snapshot slice
+      }
+    };
+
     const hydrateTape = async () => {
       if (tapeStatus !== "idle") return;
       tapeStatus = "loading";
@@ -474,7 +511,10 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       if (!Object.keys(next.historyByCoin).length && !Object.keys(next.tapeByCoin).length && !next.meta) return;
       haveSnapshot = true;
       dispatch({ type: "snapshot", ...next });
-      if (!closed) void hydrateTape();
+      if (!closed) {
+        void hydrateTape();
+        void hydrateHistory(next.meta);
+      }
     };
 
     let snapInflight: Promise<boolean> | null = null;
