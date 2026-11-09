@@ -137,6 +137,20 @@ export interface SleeveMeta {
   wallet: string | null;
 }
 
+export type LiveAccountStatus = "ok" | "pending" | "unavailable";
+
+/** Live Hyperliquid account row. Distinct from archived BlockEvent.accountValue. */
+export interface LiveAccountSnapshot {
+  coin: string;
+  status: LiveAccountStatus;
+  network: string;
+  wallet: string | null;
+  accountValue: number | null;
+  withdrawable: number | null;
+  updatedAt: number;
+  position?: Position;
+}
+
 export interface Meta {
   model: string;
   wallet: string | null;
@@ -159,6 +173,7 @@ export interface Meta {
   /** Key under historyByCoin for legacy events.jsonl rows (no top-level coin). */
   legacyUnscopedCoin?: string;
   legacyUnscopedCount?: number;
+  liveAccountsByCoin?: Record<string, LiveAccountSnapshot>;
 }
 
 export interface Timing {

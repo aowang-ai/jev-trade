@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { applyLiveMid } from "./ohlc";
+import type { LiveAccountSnapshot } from "./bot-types";
 import type { BlockEvent, ConnectionState, FeedState, Fill, Meta, PricePoint, Quote, SleeveFeed } from "./types";
 
 const CAP = 1000;
@@ -31,6 +32,7 @@ interface State {
   meta: Meta | null;
   connection: ConnectionState;
   sleeves: Record<string, SleeveMem>;
+  liveAccountsByCoin: Record<string, LiveAccountSnapshot>;
 }
 
 type Action =
@@ -41,7 +43,9 @@ type Action =
   | { type: "quote"; coin: string; block: number; quote: Quote }
   | { type: "connection"; connection: ConnectionState }
   | { type: "tapes"; tapeByCoin: Record<string, PricePoint[]> }
-  | { type: "price"; coin: string; mark: Mark };
+  | { type: "price"; coin: string; mark: Mark }
+  | { type: "account"; row: LiveAccountSnapshot }
+  | { type: "accounts"; liveAccountsByCoin: Record<string, LiveAccountSnapshot> };
 
 const emptySleeve = (): SleeveMem => ({
   events: [],
@@ -257,6 +261,17 @@ function reducer(state: State, action: Action): State {
     case "connection":
       return state.connection === action.connection ? state : { ...state, connection: action.connection };
 
+    case "accounts":
+      return { ...state, liveAccountsByCoin: { ...state.liveAccountsByCoin, ...action.liveAccountsByCoin } };
+
+    case "account": {
+      const row = action.row;
+      return {
+        ...state,
+        liveAccountsByCoin: { ...state.liveAccountsByCoin, [row.coin]: row },
+      };
+    }
+
     case "snapshot": {
       const coins = new Set<string>([
         ...Object.keys(action.historyByCoin),
@@ -271,6 +286,7 @@ function reducer(state: State, action: Action): State {
         meta: action.meta ?? state.meta,
         connection: "live",
         sleeves,
+        liveAccountsByCoin: action.meta?.liveAccountsByCoin ?? state.liveAccountsByCoin,
       };
     }
 
@@ -368,6 +384,35 @@ function parseMeta(raw: Record<string, unknown> | null): Meta | null {
       typeof raw.historicalThroughTs === "number" ? raw.historicalThroughTs : raw.historicalThroughTs === null ? null : undefined,
     legacyUnscopedCoin: typeof raw.legacyUnscopedCoin === "string" ? raw.legacyUnscopedCoin : undefined,
     legacyUnscopedCount: typeof raw.legacyUnscopedCount === "number" ? raw.legacyUnscopedCount : undefined,
+    liveAccountsByCoin: parseLiveAccountsMap(raw.liveAccountsByCoin),
+  };
+}
+
+function parseLiveAccountsMap(raw: unknown): Record<string, LiveAccountSnapshot> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, LiveAccountSnapshot> = {};
+  for (const [coin, row] of Object.entries(raw as Record<string, unknown>)) {
+    const snap = parseLiveAccountRow(row);
+    if (snap) out[coin] = { ...snap, coin };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function parseLiveAccountRow(raw: unknown): LiveAccountSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const status = r.status === "ok" || r.status === "pending" || r.status === "unavailable" ? r.status : "pending";
+  const coin = typeof r.coin === "string" ? r.coin : "";
+  if (!coin) return null;
+  return {
+    coin,
+    status,
+    network: typeof r.network === "string" ? r.network : "",
+    wallet: typeof r.wallet === "string" ? r.wallet : null,
+    accountValue: typeof r.accountValue === "number" ? r.accountValue : null,
+    withdrawable: typeof r.withdrawable === "number" ? r.withdrawable : null,
+    updatedAt: typeof r.updatedAt === "number" ? r.updatedAt : Date.now(),
+    position: r.position && typeof r.position === "object" ? (r.position as LiveAccountSnapshot["position"]) : undefined,
   };
 }
 
@@ -417,6 +462,7 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
     meta: null,
     connection: "connecting" as ConnectionState,
     sleeves: {},
+    liveAccountsByCoin: {},
   });
   const loadTapeRef = useRef(() => {});
   const loadTape = useCallback(() => loadTapeRef.current(), []);
@@ -475,6 +521,18 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       });
     };
 
+    const hydrateAccounts = async () => {
+      try {
+        const r = await fetch(`${base}/accounts`);
+        if (!r.ok) return;
+        const raw = await r.json();
+        const liveAccountsByCoin = parseLiveAccountsMap(raw);
+        if (liveAccountsByCoin) dispatch({ type: "accounts", liveAccountsByCoin });
+      } catch {
+        // retry on next account SSE event
+      }
+    };
+
     const hydrateHistory = async (m: Meta | null) => {
       if (!m?.restorationMode) return;
       try {
@@ -516,6 +574,7 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       if (!closed) {
         void hydrateTape();
         void hydrateHistory(next.meta);
+        void hydrateAccounts();
       }
     };
 
@@ -596,6 +655,11 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
       handle("ping", () => {
         dispatch({ type: "connection", connection: "live" });
       });
+      handle("account", (data) => {
+        const row = parseLiveAccountRow(data);
+        if (!row) return;
+        dispatch({ type: "account", row });
+      });
     }
 
     connect();
@@ -618,5 +682,11 @@ export function useFeed(apiUrl: string): FeedState & { loadTape: () => void } {
     };
   }
 
-  return { meta: state.meta, connection: state.connection, byCoin, loadTape };
+  return {
+    meta: state.meta,
+    connection: state.connection,
+    byCoin,
+    liveAccountsByCoin: state.liveAccountsByCoin,
+    loadTape,
+  };
 }

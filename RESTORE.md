@@ -132,6 +132,8 @@ No unauthenticated write routes. Archive keys under `mig1/public-history.tgz` ar
 
 When `meta.restorationMode` is true, the dashboard fetches full `/history` after the SSE snapshot so CALL rows are not capped at 12.
 
+**Balance header:** archived `BlockEvent.accountValue` is null. Live testnet equity comes from `GET /accounts` and SSE `account` events (`meta.liveAccountsByCoin`), refreshed from Hyperliquid `clearinghouseState` on the read-only wallets.
+
 ## Safety checks
 
 - `assertRestorationSafety()` rejects `PRIVATE_KEY`, `.wallets.json`, and `WALLETS_JSON` with keys when `RESTORATION_MODE=true`.

@@ -5,6 +5,7 @@ import { LEGACY_UNSCOPED_COIN } from "./history-import";
 import { loadHistoryBundle } from "./r2-history";
 import { Market } from "./market";
 import { createModel } from "./model";
+import { liveAccountFromMarket, liveAccountsFromMarkets } from "./live-account";
 import { loadSleeves } from "./sleeves";
 import { startServer, type SleeveView } from "./server";
 import { Trader } from "./trader";
@@ -48,6 +49,7 @@ const meta: Meta = {
   historicalThroughTs: historyStore.historicalThrough(),
   legacyUnscopedCoin: LEGACY_UNSCOPED_COIN,
   legacyUnscopedCount: historyStore.stats().coins[LEGACY_UNSCOPED_COIN]?.events ?? 0,
+  liveAccountsByCoin: {},
 };
 
 let server: ReturnType<typeof startServer> | undefined;
@@ -71,6 +73,13 @@ for (const spec of specs) {
       const market = new Market(feed, spec);
       markets.push(market);
       await market.init();
+      market.onAccountRefresh = () => {
+        if (!meta.liveAccountsByCoin) meta.liveAccountsByCoin = {};
+        const row = liveAccountFromMarket(market);
+        meta.liveAccountsByCoin[market.coin] = row;
+        server?.broadcastAccount(market.coin, row);
+        server?.invalidateSnapshot();
+      };
       const trader = new Trader(
         market,
         createModel(),
@@ -137,9 +146,20 @@ server = startServer(meta, views, {
 
 for (const start of starters) start();
 
+async function refreshLiveAccounts() {
+  await Promise.all(markets.map((m) => m.refresh().catch(() => {})));
+  meta.liveAccountsByCoin = liveAccountsFromMarkets(markets);
+  for (const m of markets) {
+    const row = meta.liveAccountsByCoin[m.coin]!;
+    server?.broadcastAccount(m.coin, row);
+  }
+  server?.invalidateSnapshot();
+}
+
+await refreshLiveAccounts();
 if (config.restorationMode || !config.executionEnabled) {
   setInterval(() => {
-    for (const m of markets) m.refresh().catch(() => {});
+    void refreshLiveAccounts();
   }, 30_000);
 }
 

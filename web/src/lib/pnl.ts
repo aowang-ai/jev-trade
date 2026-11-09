@@ -1,4 +1,4 @@
-import type { BlockEvent } from "./bot-types";
+import type { BlockEvent, LiveAccountSnapshot } from "./bot-types";
 
 export type SleevePnl = {
   coin: string;
@@ -33,8 +33,43 @@ export function portfolioPnl(latestByCoin: Record<string, BlockEvent | null | un
   return { unrealized, realized };
 }
 
-/** Sum of Hyperliquid account equity across sleeve wallets. */
-export function portfolioBalance(latestByCoin: Record<string, BlockEvent | null | undefined>): number | null {
+export type PortfolioBalanceView = {
+  /** Total account equity when known. */
+  value: number | null;
+  /** At least one live row exists (restoration / read-only wallets). */
+  hasLive: boolean;
+  /** Still waiting on first HL clearinghouse response. */
+  pending: boolean;
+  /** HL row failed or no wallet configured. */
+  unavailable: boolean;
+};
+
+/** Sum Hyperliquid account equity. Prefers live clearinghouse snapshots over archived tick fields. */
+export function portfolioBalanceView(
+  latestByCoin: Record<string, BlockEvent | null | undefined>,
+  liveByCoin?: Record<string, LiveAccountSnapshot>,
+): PortfolioBalanceView {
+  const live = liveByCoin ?? {};
+  const keys = Object.keys(live);
+  if (keys.length) {
+    let sum = 0;
+    let anyOk = false;
+    let pending = false;
+    let unavailable = false;
+    for (const row of Object.values(live)) {
+      if (row.status === "ok" && typeof row.accountValue === "number" && Number.isFinite(row.accountValue)) {
+        sum += row.accountValue;
+        anyOk = true;
+      } else if (row.status === "pending") pending = true;
+      else if (row.status === "unavailable") unavailable = true;
+    }
+    return {
+      value: anyOk ? sum : null,
+      hasLive: true,
+      pending: pending && !anyOk,
+      unavailable: unavailable && !anyOk && !pending,
+    };
+  }
   let sum = 0;
   let any = false;
   for (const latest of Object.values(latestByCoin)) {
@@ -44,7 +79,17 @@ export function portfolioBalance(latestByCoin: Record<string, BlockEvent | null 
       any = true;
     }
   }
-  return any ? sum : null;
+  return {
+    value: any ? sum : null,
+    hasLive: false,
+    pending: !any,
+    unavailable: false,
+  };
+}
+
+/** @deprecated use portfolioBalanceView */
+export function portfolioBalance(latestByCoin: Record<string, BlockEvent | null | undefined>): number | null {
+  return portfolioBalanceView(latestByCoin).value;
 }
 
 /** Unrealized as a percent of initial margin, when size, entry, and leverage exist. */

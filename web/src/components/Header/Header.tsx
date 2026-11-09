@@ -8,6 +8,8 @@ import styles from "./Header.module.css";
 export interface HeaderProps {
   connection: "connecting" | "live" | "reconnecting";
   balance: number | null;
+  balancePending?: boolean;
+  balanceUnavailable?: boolean;
   unrealized: number | null;
   realized: number | null;
 }
@@ -16,17 +18,25 @@ function Score({
   label,
   value,
   signed = true,
+  placeholder,
 }: {
   label: string;
   value: number | null;
   signed?: boolean;
+  placeholder?: string;
 }) {
   const color = !signed || value == null ? undefined : value >= 0 ? "var(--pnl-pos)" : "var(--pnl-neg)";
   return (
     <span className={styles.score}>
       <span className={styles.scoreKey}>{label}</span>
       <span className={styles.scoreVal} style={color ? { color } : undefined}>
-        {value == null ? <Bone w={64} h={16} /> : signed ? fmtSignedUsd(value, 2) : fmtUsd(value, 2)}
+        {value == null
+          ? placeholder
+            ? placeholder
+            : <Bone w={64} h={16} />
+          : signed
+            ? fmtSignedUsd(value, 2)
+            : fmtUsd(value, 2)}
       </span>
     </span>
   );
@@ -43,7 +53,7 @@ function GitHubMark() {
   );
 }
 
-export default function Header({ connection, balance, unrealized, realized }: HeaderProps) {
+export default function Header({ connection, balance, balancePending, balanceUnavailable, unrealized, realized }: HeaderProps) {
   const live = connection === "live";
 
   return (
@@ -69,7 +79,12 @@ export default function Header({ connection, balance, unrealized, realized }: He
         <span>{live ? "Live" : "Offline"}</span>
       </span>
       <span className={styles.scores}>
-        <Score label="balance" value={balance} signed={false} />
+        <Score
+          label="balance"
+          value={balance}
+          signed={false}
+          placeholder={balanceUnavailable ? "n/a" : balancePending ? undefined : undefined}
+        />
         <Score label="unrealized" value={unrealized} />
         <Score label="realized" value={realized} />
       </span>
