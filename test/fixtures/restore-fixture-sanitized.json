@@ -1,0 +1,1405 @@
+{
+  "schemaVersion": 1,
+  "purpose": "sanitized multi-event restore fixture for jev-trade cloud agent \u2014 no secrets",
+  "notes": [
+    "Each history jsonl line is one BlockEvent JSON object (NDJSON).",
+    "events.jsonl lacks top-level coin; per-coin files include coin.",
+    "fill is always null in this archive (no fill object instances).",
+    "quote may be null or object; quote objects may include optional gasMon and/or unchanged (older schema) plus side,price,size,txHash,cancel,status,orderId,capped.",
+    "position/totals/resting use either Mon-era (*Mon) or Sz-era (*Sz) field names \u2014 handlers must accept both.",
+    "decision always present with action,probabilities{buy,sell,hold},upIn10,latencyMs,late \u2014 no intent/bias/leverage in this archive.",
+    "Wallet addresses allowed in walletsPublic / hlAccountStates."
+  ],
+  "eventCountInFixture": 16,
+  "eventLabels": [
+    "events.jsonl:no_coin:quote_null:Mon_fields",
+    "events.jsonl:no_coin:quote_dict:gasMon",
+    "events.jsonl:no_coin:quote_dict:unchanged",
+    "events-BTC:quote_null:Sz_fields",
+    "events-BTC:quote_dict",
+    "events-ETH:quote_null:Sz_fields",
+    "events-ETH:quote_dict",
+    "events-SOL:quote_null:Sz_fields",
+    "events-SOL:quote_dict",
+    "events-DOGE:quote_null:Sz_fields",
+    "events-DOGE:quote_dict",
+    "events-BNB:quote_null:Sz_fields",
+    "events-BNB:quote_dict",
+    "events-AVAX:first",
+    "events-GOLD:first",
+    "events-NVDA:first"
+  ],
+  "events": [
+    {
+      "block": 20,
+      "ts": 1789652815168,
+      "mid": 76445,
+      "bestBid": 76441,
+      "bestAsk": 76449,
+      "spreadBps": 1.05,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidMon": 0,
+        "askMon": 0.001
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "unrealizedUsd": 0,
+        "unrealizedMon": 0
+      },
+      "totals": {
+        "blocks": 20,
+        "decisions": 18,
+        "quotes": 18,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0.000191,
+        "gasMon": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlMon": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "block": 1,
+      "ts": 1789652536240,
+      "mid": 76137.5,
+      "bestBid": 76137,
+      "bestAsk": 76138,
+      "spreadBps": 0.13,
+      "decision": {
+        "action": "sell",
+        "probabilities": {
+          "buy": 0.1398543754368223,
+          "sell": 0.8601456245631777,
+          "hold": 0
+        },
+        "upIn10": 0.1398543754368223,
+        "latencyMs": 81,
+        "late": false
+      },
+      "quote": {
+        "side": "sell",
+        "price": 76137,
+        "size": 0.001,
+        "txHash": null,
+        "gasMon": 0,
+        "cancel": [],
+        "status": "sim",
+        "orderId": null,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidMon": 0,
+        "askMon": 0.001
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "unrealizedUsd": 0,
+        "unrealizedMon": 0
+      },
+      "totals": {
+        "blocks": 1,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 0,
+        "jevUsd": 7e-06,
+        "gasMon": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlMon": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "block": 136,
+      "ts": 1789653575735,
+      "mid": 76935.5,
+      "bestBid": 76935,
+      "bestAsk": 76936,
+      "spreadBps": 0.13,
+      "decision": {
+        "action": "buy",
+        "probabilities": {
+          "buy": 0.524729805230163,
+          "sell": 0.475270194769837,
+          "hold": 0
+        },
+        "upIn10": 0.524729805230163,
+        "latencyMs": 81,
+        "late": false
+      },
+      "quote": {
+        "side": "buy",
+        "price": 76935,
+        "size": 0.001,
+        "txHash": null,
+        "gasMon": 0,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60357649133,
+        "capped": false,
+        "unchanged": true
+      },
+      "fill": null,
+      "resting": {
+        "bidMon": 0.001,
+        "askMon": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "unrealizedUsd": 0,
+        "unrealizedMon": 0
+      },
+      "totals": {
+        "blocks": 136,
+        "decisions": 15,
+        "quotes": 14,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 121,
+        "jevUsd": 0.000155,
+        "gasMon": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlMon": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "BTC",
+      "block": 2,
+      "ts": 1789660996708,
+      "mid": 76971.5,
+      "bestBid": 76971,
+      "bestAsk": 76972,
+      "spreadBps": 0.13,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 2.532e-05,
+        "gasUsd": 1.948796,
+        "realizedUsd": -7.409732,
+        "pnlUsd": -9.358528,
+        "pnlSz": -0.00012158,
+        "pnlPct": -4.9336
+      }
+    },
+    {
+      "coin": "BTC",
+      "block": 1,
+      "ts": 1789660998813,
+      "mid": 76971.5,
+      "bestBid": 76971,
+      "bestAsk": 76972,
+      "spreadBps": 0.13,
+      "decision": {
+        "action": "sell",
+        "probabilities": {
+          "buy": 0.04,
+          "sell": 0.96,
+          "hold": 0
+        },
+        "upIn10": 0.04,
+        "latencyMs": 2199,
+        "late": false
+      },
+      "quote": {
+        "side": "sell",
+        "price": 76972,
+        "size": 0.00051,
+        "txHash": null,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60365017666,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0.00051
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 6,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 5,
+        "jevUsd": 5.7e-05,
+        "gasSz": 2.532e-05,
+        "gasUsd": 1.948796,
+        "realizedUsd": -7.409732,
+        "pnlUsd": -9.358528,
+        "pnlSz": -0.00012158,
+        "pnlPct": -4.9336
+      }
+    },
+    {
+      "coin": "ETH",
+      "block": 2,
+      "ts": 1789660996588,
+      "mid": 2475.95,
+      "bestBid": 2475.8,
+      "bestAsk": 2476.1,
+      "spreadBps": 1.21,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "ETH",
+      "block": 1,
+      "ts": 1789660999257,
+      "mid": 2475.95,
+      "bestBid": 2475.8,
+      "bestAsk": 2476.1,
+      "spreadBps": 1.21,
+      "decision": {
+        "action": "sell",
+        "probabilities": {
+          "buy": 0.07,
+          "sell": 0.93,
+          "hold": 0
+        },
+        "upIn10": 0.07,
+        "latencyMs": 2558,
+        "late": false
+      },
+      "quote": {
+        "side": "sell",
+        "price": 2476,
+        "size": 0.0161,
+        "txHash": null,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60365017925,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0.0161
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 7,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 6,
+        "jevUsd": 5.6e-05,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "SOL",
+      "block": 2,
+      "ts": 1789660996618,
+      "mid": 101.35499999999999,
+      "bestBid": 101.35,
+      "bestAsk": 101.36,
+      "spreadBps": 0.99,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "SOL",
+      "block": 1,
+      "ts": 1789660998866,
+      "mid": 101.35499999999999,
+      "bestBid": 101.35,
+      "bestAsk": 101.36,
+      "spreadBps": 0.99,
+      "decision": {
+        "action": "buy",
+        "probabilities": {
+          "buy": 0.7,
+          "sell": 0.3,
+          "hold": 0
+        },
+        "upIn10": 0.7,
+        "latencyMs": 2213,
+        "late": false
+      },
+      "quote": {
+        "side": "buy",
+        "price": 101.35,
+        "size": 0.39,
+        "txHash": null,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60365017670,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidSz": 0.39,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 6,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 5,
+        "jevUsd": 5.8e-05,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "DOGE",
+      "block": 2,
+      "ts": 1789661816869,
+      "mid": 0.081816,
+      "bestBid": 0.081789,
+      "bestAsk": 0.081843,
+      "spreadBps": 6.6,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "DOGE",
+      "block": 1,
+      "ts": 1789661819289,
+      "mid": 0.081816,
+      "bestBid": 0.081789,
+      "bestAsk": 0.081843,
+      "spreadBps": 6.6,
+      "decision": {
+        "action": "buy",
+        "probabilities": {
+          "buy": 0.97,
+          "sell": 0.03,
+          "hold": 0
+        },
+        "upIn10": 0.97,
+        "latencyMs": 2341,
+        "late": false
+      },
+      "quote": {
+        "side": "buy",
+        "price": 0.08179,
+        "size": 488,
+        "txHash": null,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60365829914,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidSz": 488,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 6,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 5,
+        "jevUsd": 5.6e-05,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "BNB",
+      "block": 2,
+      "ts": 1789662328305,
+      "mid": 730.01,
+      "bestBid": 729.72,
+      "bestAsk": 730.3,
+      "spreadBps": 7.95,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "BNB",
+      "block": 1,
+      "ts": 1789662331282,
+      "mid": 730.01,
+      "bestBid": 729.72,
+      "bestAsk": 730.3,
+      "spreadBps": 7.95,
+      "decision": {
+        "action": "buy",
+        "probabilities": {
+          "buy": 0.98,
+          "sell": 0.02,
+          "hold": 0
+        },
+        "upIn10": 0.98,
+        "latencyMs": 3110,
+        "late": false
+      },
+      "quote": {
+        "side": "buy",
+        "price": 729.72,
+        "size": 0.054,
+        "txHash": null,
+        "cancel": [],
+        "status": "placed",
+        "orderId": 60366326194,
+        "capped": false
+      },
+      "fill": null,
+      "resting": {
+        "bidSz": 0.054,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 7,
+        "decisions": 1,
+        "quotes": 1,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 6,
+        "jevUsd": 5.7e-05,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "AVAX",
+      "block": 2,
+      "ts": 1789661817008,
+      "mid": 7.6256,
+      "bestBid": 7.6231,
+      "bestAsk": 7.6281,
+      "spreadBps": 6.56,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "xyz:GOLD",
+      "block": 2,
+      "ts": 1789661194031,
+      "mid": 4381.5,
+      "bestBid": 4365.1,
+      "bestAsk": 4397.9,
+      "spreadBps": 74.86,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    },
+    {
+      "coin": "xyz:NVDA",
+      "block": 2,
+      "ts": 1789661193998,
+      "mid": 218.0354775,
+      "bestBid": 217.98095500000002,
+      "bestAsk": 218.09,
+      "spreadBps": 5,
+      "decision": {
+        "action": "hold",
+        "probabilities": {
+          "buy": 0,
+          "sell": 0,
+          "hold": 1
+        },
+        "upIn10": 0.5,
+        "latencyMs": 0,
+        "late": true
+      },
+      "quote": null,
+      "fill": null,
+      "resting": {
+        "bidSz": 0,
+        "askSz": 0
+      },
+      "position": {
+        "side": "flat",
+        "size": 0,
+        "entryPrice": null,
+        "leverage": 3,
+        "unrealizedUsd": 0,
+        "unrealizedSz": 0
+      },
+      "totals": {
+        "blocks": 2,
+        "decisions": 0,
+        "quotes": 0,
+        "fills": 0,
+        "reverted": 0,
+        "lateBlocks": 1,
+        "jevUsd": 0,
+        "gasSz": 0,
+        "gasUsd": 0,
+        "realizedUsd": 0,
+        "pnlUsd": 0,
+        "pnlSz": 0,
+        "pnlPct": 0
+      }
+    }
+  ],
+  "walletsPublic": {
+    "network": "hyperliquid-testnet",
+    "createdAt": "2026-09-17T15:55:04.258Z",
+    "sentUsd": 200,
+    "source": {
+      "coin": "BTC",
+      "address": "0x1dc5bDcFcd24B1b0Fbc7bEB2bb1585c1937Cc475",
+      "note": "BTC sleeve address sourced from local wallet config (secret material excluded)"
+    },
+    "sleeves": [
+      {
+        "coin": "ETH",
+        "address": "0xCDf4f6929993769EB0B939901D7491c22a95b45C"
+      },
+      {
+        "coin": "SOL",
+        "address": "0xE7A47b6950E975d6ceB7520417ac77267c53DAb6"
+      },
+      {
+        "coin": "DOGE",
+        "address": "0x8A49DdE3FAeaD63E35c52448D9284b50f5CcC14B"
+      },
+      {
+        "coin": "BNB",
+        "address": "0x2F9AfA933242772661cC0B588d0F8Ad5f8c87D51"
+      }
+    ],
+    "btcAddress": "0x1dc5bDcFcd24B1b0Fbc7bEB2bb1585c1937Cc475",
+    "allAddresses": {
+      "BTC": "0x1dc5bDcFcd24B1b0Fbc7bEB2bb1585c1937Cc475",
+      "ETH": "0xCDf4f6929993769EB0B939901D7491c22a95b45C",
+      "SOL": "0xE7A47b6950E975d6ceB7520417ac77267c53DAb6",
+      "DOGE": "0x8A49DdE3FAeaD63E35c52448D9284b50f5CcC14B",
+      "BNB": "0x2F9AfA933242772661cC0B588d0F8Ad5f8c87D51"
+    },
+    "railway": {
+      "projectId": "9393a327-4fde-4d9c-9bd7-1447911852f9",
+      "environmentId": "789e84ab-9622-4454-8e2b-a5e74295ab0f",
+      "serviceId": "ec1f5791-856b-47e9-a0e6-2b6558d1bcdf",
+      "oldHost": "bot-production-203c.up.railway.app",
+      "oldRailwayUserId": "5f55419e-955c-49be-8413-ebcccf3b0298",
+      "status": "oauth_token_cleared_on_mac; mcp_account_is_different_empty_workspace"
+    },
+    "localEnvNonSecret": {
+      "HL_TESTNET": "true",
+      "TICK_MS": "10000",
+      "PRICE_MS": "200",
+      "BANKROLL_USD": "100",
+      "QUOTE_INSIDE_TICKS": "1",
+      "MODEL": "jev",
+      "JEV_PROVIDER": "gateway",
+      "JEV_MODEL_ID": "typesafe-ai/jev",
+      "PORT": "3000",
+      "DRY_RUN": "false"
+    },
+    "historyFiles": [
+      {
+        "file": "events-AVAX.jsonl",
+        "lines": 817,
+        "bytes": 528104,
+        "sha256": "b0596b006d89ebe7a51de3427181920423f4981cbdbb27b3279089cd8b084606",
+        "first_coin": "AVAX",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:16:57.008000+08:00",
+        "last_coin": "AVAX",
+        "last_block": 778,
+        "last_ts": "2026-09-18T00:24:28.512000+08:00",
+        "last_totals": {
+          "blocks": 778,
+          "decisions": 68,
+          "quotes": 31,
+          "fills": 19,
+          "reverted": 0,
+          "lateBlocks": 708,
+          "jevUsd": 0.003959,
+          "gasSz": 0.01175478,
+          "gasUsd": 0.089679,
+          "realizedUsd": 0.003228,
+          "pnlUsd": -0.12808,
+          "pnlSz": -0.01678824,
+          "pnlPct": -0.0644
+        },
+        "last_position": {
+          "side": "short",
+          "size": 31.6,
+          "entryPrice": 7.6267,
+          "leverage": 3,
+          "unrealizedUsd": -0.041629,
+          "unrealizedSz": -0.00545657
+        }
+      },
+      {
+        "file": "events-BNB.jsonl",
+        "lines": 1589,
+        "bytes": 1038433,
+        "sha256": "ddc156b872c1ac9907f711d00ba556498f8304561aecadcfb1ccc3614a3f9ea2",
+        "first_coin": "BNB",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:25:28.305000+08:00",
+        "last_coin": "BNB",
+        "last_block": 1590,
+        "last_ts": "2026-09-18T00:38:48.966000+08:00",
+        "last_totals": {
+          "blocks": 1590,
+          "decisions": 474,
+          "quotes": 77,
+          "fills": 42,
+          "reverted": 0,
+          "lateBlocks": 1115,
+          "jevUsd": 0.0306,
+          "gasSz": 0.00023884,
+          "gasUsd": 0.174215,
+          "realizedUsd": 0.006984,
+          "pnlUsd": -0.111662,
+          "pnlSz": -0.00015308,
+          "pnlPct": -0.0562
+        },
+        "last_position": {
+          "side": "short",
+          "size": 0.53,
+          "entryPrice": 729.554,
+          "leverage": 3,
+          "unrealizedUsd": 0.055569,
+          "unrealizedSz": 7.618e-05
+        }
+      },
+      {
+        "file": "events-BTC.jsonl",
+        "lines": 3727,
+        "bytes": 2419669,
+        "sha256": "d82eae15e4213409d4a24c30d4147b05357ab6fc97733272aab4ee194f076383",
+        "first_coin": "BTC",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:03:16.708000+08:00",
+        "last_coin": "BTC",
+        "last_block": 1589,
+        "last_ts": "2026-09-18T00:38:49.330000+08:00",
+        "last_totals": {
+          "blocks": 1591,
+          "decisions": 557,
+          "quotes": 0,
+          "fills": 0,
+          "reverted": 0,
+          "lateBlocks": 1034,
+          "jevUsd": 0.037624,
+          "gasSz": 2.841e-05,
+          "gasUsd": 2.182023,
+          "realizedUsd": -7.605281,
+          "pnlUsd": -9.115517,
+          "pnlSz": -0.00011868,
+          "pnlPct": -4.7993
+        },
+        "last_position": {
+          "side": "short",
+          "size": 0.00724,
+          "entryPrice": 76897.7,
+          "leverage": 3,
+          "unrealizedUsd": 0.671787,
+          "unrealizedSz": 8.75e-06
+        }
+      },
+      {
+        "file": "events-DOGE.jsonl",
+        "lines": 2408,
+        "bytes": 1556531,
+        "sha256": "b0fb14cf57b748eb0735fd55eea356987ba02d36326ce1e5cc6b000d90df0d22",
+        "first_coin": "DOGE",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:16:56.869000+08:00",
+        "last_coin": "DOGE",
+        "last_block": 1589,
+        "last_ts": "2026-09-18T00:38:48.446000+08:00",
+        "last_totals": {
+          "blocks": 1591,
+          "decisions": 516,
+          "quotes": 31,
+          "fills": 14,
+          "reverted": 0,
+          "lateBlocks": 1074,
+          "jevUsd": 0.032157,
+          "gasSz": 1.80181772,
+          "gasUsd": 0.146804,
+          "realizedUsd": -0.076248,
+          "pnlUsd": 0.282414,
+          "pnlSz": 3.46624445,
+          "pnlPct": 0.1478
+        },
+        "last_position": {
+          "side": "short",
+          "size": 2196,
+          "entryPrice": 0.081762,
+          "leverage": 3,
+          "unrealizedUsd": 0.505466,
+          "unrealizedSz": 6.20390179
+        }
+      },
+      {
+        "file": "events-ETH.jsonl",
+        "lines": 3723,
+        "bytes": 2462052,
+        "sha256": "7c871da31cf68c7de18f157d75a65812d9995ae26429c62b3fdc631f80baa363",
+        "first_coin": "ETH",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:03:16.588000+08:00",
+        "last_coin": "ETH",
+        "last_block": 1586,
+        "last_ts": "2026-09-18T00:38:48.685000+08:00",
+        "last_totals": {
+          "blocks": 1588,
+          "decisions": 516,
+          "quotes": 34,
+          "fills": 10,
+          "reverted": 6,
+          "lateBlocks": 1072,
+          "jevUsd": 0.033712,
+          "gasSz": 8.172e-05,
+          "gasUsd": 0.201406,
+          "realizedUsd": 0.027907,
+          "pnlUsd": 0.903274,
+          "pnlSz": 0.00036652,
+          "pnlPct": 0.4519
+        },
+        "last_position": {
+          "side": "short",
+          "size": 0.1295,
+          "entryPrice": 2472.91,
+          "leverage": 3,
+          "unrealizedUsd": 1.076773,
+          "unrealizedSz": 0.00043692
+        }
+      },
+      {
+        "file": "events-GOLD.jsonl",
+        "lines": 1023,
+        "bytes": 630135,
+        "sha256": "78cea0735568b1c4b4cf870d53a0fd10c4a3355b33ed76a9c878930b0adb7e14",
+        "first_coin": "xyz:GOLD",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:06:34.031000+08:00",
+        "last_coin": "xyz:GOLD",
+        "last_block": 954,
+        "last_ts": "2026-09-18T00:15:44.341000+08:00",
+        "last_totals": {
+          "blocks": 957,
+          "decisions": 331,
+          "quotes": 1,
+          "fills": 0,
+          "reverted": 0,
+          "lateBlocks": 623,
+          "jevUsd": 0.020237,
+          "gasSz": 0,
+          "gasUsd": 0,
+          "realizedUsd": 0,
+          "pnlUsd": 0,
+          "pnlSz": 0,
+          "pnlPct": 0
+        },
+        "last_position": {
+          "side": "flat",
+          "size": 0,
+          "entryPrice": null,
+          "leverage": 3,
+          "unrealizedUsd": 0,
+          "unrealizedSz": 0
+        }
+      },
+      {
+        "file": "events-NVDA.jsonl",
+        "lines": 1023,
+        "bytes": 671831,
+        "sha256": "7e9427cd66bd358638b5a82bcc96e11fea76378832aff917dff9930b5698fbe9",
+        "first_coin": "xyz:NVDA",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:06:33.998000+08:00",
+        "last_coin": "xyz:NVDA",
+        "last_block": 955,
+        "last_ts": "2026-09-18T00:15:45.100000+08:00",
+        "last_totals": {
+          "blocks": 956,
+          "decisions": 306,
+          "quotes": 30,
+          "fills": 1,
+          "reverted": 0,
+          "lateBlocks": 646,
+          "jevUsd": 0.01831,
+          "gasSz": 3.36e-06,
+          "gasUsd": 0.000732,
+          "realizedUsd": 0,
+          "pnlUsd": -0.007452,
+          "pnlSz": -3.421e-05,
+          "pnlPct": -0.0037
+        },
+        "last_position": {
+          "side": "long",
+          "size": 0.112,
+          "entryPrice": 217.98,
+          "leverage": 3,
+          "unrealizedUsd": -0.00672,
+          "unrealizedSz": -3.085e-05
+        }
+      },
+      {
+        "file": "events-SOL.jsonl",
+        "lines": 3682,
+        "bytes": 2408733,
+        "sha256": "f16d1aee612682d2391d8f744583151eba8cd005a8a2cfcc547db27f296cd396",
+        "first_coin": "SOL",
+        "first_block": 2,
+        "first_ts": "2026-09-18T00:03:16.618000+08:00",
+        "last_coin": "SOL",
+        "last_block": 1591,
+        "last_ts": "2026-09-18T00:38:49.298000+08:00",
+        "last_totals": {
+          "blocks": 1592,
+          "decisions": 542,
+          "quotes": 9,
+          "fills": 4,
+          "reverted": 4,
+          "lateBlocks": 1047,
+          "jevUsd": 0.035312,
+          "gasSz": 0.00244983,
+          "gasUsd": 0.247225,
+          "realizedUsd": -0.367092,
+          "pnlUsd": 0.570484,
+          "pnlSz": 0.00565311,
+          "pnlPct": 0.2859
+        },
+        "last_position": {
+          "side": "short",
+          "size": 5.19,
+          "entryPrice": 101.12989999999999,
+          "leverage": 3,
+          "unrealizedUsd": 1.184801,
+          "unrealizedSz": 0.01174058
+        }
+      },
+      {
+        "file": "events.jsonl",
+        "lines": 25110,
+        "bytes": 15943122,
+        "sha256": "521c052dac3cb5392c5bc8279a15ef448157d78aeb2b546519e14d4c5c8d8825",
+        "first_coin": null,
+        "first_block": 1,
+        "first_ts": "2026-09-17T21:42:16.240000+08:00",
+        "last_coin": null,
+        "last_block": 1088,
+        "last_ts": "2026-09-17T23:54:53.345000+08:00",
+        "last_totals": {
+          "blocks": 1091,
+          "decisions": 297,
+          "quotes": 0,
+          "fills": 5,
+          "reverted": 0,
+          "lateBlocks": 794,
+          "jevUsd": 0.019794,
+          "gasSz": 1.692e-05,
+          "gasUsd": 1.302065,
+          "realizedUsd": -3.26216,
+          "pnlUsd": -8.297765,
+          "pnlSz": -0.00010785,
+          "pnlPct": -0.8375
+        },
+        "last_position": {
+          "side": "short",
+          "size": 0.01868,
+          "entryPrice": 76715.1,
+          "leverage": 3,
+          "unrealizedUsd": -3.73354,
+          "unrealizedSz": -4.853e-05
+        }
+      }
+    ]
+  },
+  "hlAccountStates": {
+    "BTC": {
+      "testnet": {
+        "address": "0x1dc5bDcFcd24B1b0Fbc7bEB2bb1585c1937Cc475",
+        "accountValue": "139.82329",
+        "totalMarginUsed": "0.151346",
+        "withdrawable": "139.217906",
+        "openPositions": [
+          {
+            "coin": "BTC",
+            "szi": "-0.00008",
+            "entryPx": "87468.0",
+            "unrealizedPnl": "0.9436"
+          }
+        ]
+      },
+      "mainnet": {
+        "address": "0x1dc5bDcFcd24B1b0Fbc7bEB2bb1585c1937Cc475",
+        "accountValue": "0.0",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "0.0",
+        "openPositions": []
+      }
+    },
+    "ETH": {
+      "testnet": {
+        "address": "0xCDf4f6929993769EB0B939901D7491c22a95b45C",
+        "accountValue": "145.725597",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "145.725597",
+        "openPositions": []
+      },
+      "mainnet": {
+        "address": "0xCDf4f6929993769EB0B939901D7491c22a95b45C",
+        "accountValue": "0.0",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "0.0",
+        "openPositions": []
+      }
+    },
+    "SOL": {
+      "testnet": {
+        "address": "0xE7A47b6950E975d6ceB7520417ac77267c53DAb6",
+        "accountValue": "35.273721",
+        "totalMarginUsed": "11.53218",
+        "withdrawable": "23.741541",
+        "openPositions": [
+          {
+            "coin": "SOL",
+            "szi": "1.32",
+            "entryPx": "118.5",
+            "unrealizedPnl": "-41.0983"
+          }
+        ]
+      },
+      "mainnet": {
+        "address": "0xE7A47b6950E975d6ceB7520417ac77267c53DAb6",
+        "accountValue": "0.0",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "0.0",
+        "openPositions": []
+      }
+    },
+    "DOGE": {
+      "testnet": {
+        "address": "0x8A49DdE3FAeaD63E35c52448D9284b50f5CcC14B",
+        "accountValue": "75.010463",
+        "totalMarginUsed": "39.254182",
+        "withdrawable": "35.756281",
+        "openPositions": [
+          {
+            "coin": "DOGE",
+            "szi": "5655.0",
+            "entryPx": "0.092182",
+            "unrealizedPnl": "-128.750308"
+          }
+        ]
+      },
+      "mainnet": {
+        "address": "0x8A49DdE3FAeaD63E35c52448D9284b50f5CcC14B",
+        "accountValue": "0.0",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "0.0",
+        "openPositions": []
+      }
+    },
+    "BNB": {
+      "testnet": {
+        "address": "0x2F9AfA933242772661cC0B588d0F8Ad5f8c87D51",
+        "accountValue": "147.906532",
+        "totalMarginUsed": "10.31655",
+        "withdrawable": "137.589982",
+        "openPositions": [
+          {
+            "coin": "BNB",
+            "szi": "0.15",
+            "entryPx": "775.43",
+            "unrealizedPnl": "-13.149"
+          }
+        ]
+      },
+      "mainnet": {
+        "address": "0x2F9AfA933242772661cC0B588d0F8Ad5f8c87D51",
+        "accountValue": "0.0",
+        "totalMarginUsed": "0.0",
+        "withdrawable": "0.0",
+        "openPositions": []
+      }
+    }
+  },
+  "historyFiles": {
+    "events-AVAX.jsonl": 817,
+    "events-BNB.jsonl": 1589,
+    "events-BTC.jsonl": 3727,
+    "events-DOGE.jsonl": 2408,
+    "events-ETH.jsonl": 3723,
+    "events-GOLD.jsonl": 1023,
+    "events-NVDA.jsonl": 1023,
+    "events-SOL.jsonl": 3682,
+    "events.jsonl": 25110
+  },
+  "totalHistoryEvents": 43102,
+  "nestedStructuresToHandle": {
+    "decision": [
+      "action",
+      "probabilities",
+      "upIn10",
+      "latencyMs",
+      "late"
+    ],
+    "probabilities": [
+      "buy",
+      "sell",
+      "hold"
+    ],
+    "quote": [
+      "null OR object with side,price,size,txHash,cancel,status,orderId,capped; optional gasMon,unchanged"
+    ],
+    "fill": [
+      "always null in archive \u2014 code should still accept future fill objects"
+    ],
+    "resting": [
+      "bidMon/askMon OR bidSz/askSz"
+    ],
+    "position": [
+      "side,size,entryPrice,unrealizedUsd; optional unrealizedMon OR unrealizedSz; optional leverage"
+    ],
+    "totals": [
+      "blocks,decisions,quotes,fills,reverted,lateBlocks,jevUsd,gasUsd,realizedUsd,pnlUsd,pnlPct; optional gasMon/pnlMon OR gasSz/pnlSz"
+    ],
+    "topLevelOptional": [
+      "coin (absent in events.jsonl)"
+    ]
+  }
+}

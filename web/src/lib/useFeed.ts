@@ -366,6 +366,8 @@ function parseMeta(raw: Record<string, unknown> | null): Meta | null {
     networkLabel: typeof raw.networkLabel === "string" ? raw.networkLabel : undefined,
     historicalThroughTs:
       typeof raw.historicalThroughTs === "number" ? raw.historicalThroughTs : raw.historicalThroughTs === null ? null : undefined,
+    legacyUnscopedCoin: typeof raw.legacyUnscopedCoin === "string" ? raw.legacyUnscopedCoin : undefined,
+    legacyUnscopedCount: typeof raw.legacyUnscopedCount === "number" ? raw.legacyUnscopedCount : undefined,
   };
 }
 

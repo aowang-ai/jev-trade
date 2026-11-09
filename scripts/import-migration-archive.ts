@@ -1,23 +1,31 @@
 #!/usr/bin/env bun
 /**
- * Coordinator import: stream JSONL from a local .tgz (public-history) or .jsonl into the bot.
- * Does not delete or overwrite R2 archive objects (mig1/*).
+ * Coordinator import: stream JSONL from a local tarball or directory into the bot.
+ * Does not delete or overwrite R2 archive source objects (e.g. mig1/public-history.tgz).
+ *
+ * Filename scopes rows (never invent coin on legacy events.jsonl):
+ *   events.jsonl        → __legacy_unscoped__
+ *   events-BTC.jsonl    → BTC (lines usually also include coin)
  *
  * Examples:
- *   bun run scripts/import-migration-archive.ts \
- *     --api https://bot.jev-trade.com \
- *     --token "$HISTORY_IMPORT_SECRET" \
- *     --tgz ./public-history.tgz
+ *   wrangler r2 object get jev-trade-mig-archive/mig1/restore-history-sanitized.tar.gz --file=restore.tgz
+ *   tar -xzf restore.tgz
  *
  *   bun run scripts/import-migration-archive.ts \
  *     --api https://bot.jev-trade.com \
  *     --token "$HISTORY_IMPORT_SECRET" \
- *     --jsonl ./btc.jsonl --coin BTC
+ *     --dir ./history
+ *
+ *   bun run scripts/import-migration-archive.ts \
+ *     --api https://bot.jev-trade.com \
+ *     --token "$HISTORY_IMPORT_SECRET" \
+ *     --tgz ./restore.tgz
  */
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { inferJsonlFileScope } from "../src/history-import";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -46,13 +54,13 @@ async function collectJsonlFiles(dir: string): Promise<string[]> {
   return out.sort();
 }
 
-async function postJsonl(api: string, token: string, file: string, coin?: string) {
+async function postJsonl(api: string, token: string, file: string, fileScope?: string) {
   const body = await Bun.file(file).text();
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,
     "content-type": "application/x-ndjson",
   };
-  if (coin) headers["x-coin"] = coin;
+  if (fileScope) headers["x-file-scope"] = fileScope;
   const r = await fetch(`${api.replace(/\/+$/, "")}/admin/import-history`, { method: "POST", headers, body });
   const text = await r.text();
   if (!r.ok) throw new Error(`${file}: ${r.status} ${text.slice(0, 300)}`);
@@ -63,38 +71,42 @@ async function main() {
   const api = arg("--api");
   const token = arg("--token");
   const tgz = arg("--tgz");
+  const dir = arg("--dir");
   const jsonl = arg("--jsonl");
-  const coin = arg("--coin");
   if (!api || !token) {
-    console.error("usage: --api URL --token SECRET (--tgz path | --jsonl path [--coin BTC])");
+    console.error("usage: --api URL --token SECRET (--tgz path | --dir path | --jsonl path)");
     process.exit(1);
   }
-  const files: { path: string; coin?: string }[] = [];
+  const files: { path: string; scope?: string }[] = [];
   if (jsonl) {
     if (!existsSync(jsonl)) throw new Error(`missing ${jsonl}`);
-    files.push({ path: jsonl, coin });
+    files.push({ path: jsonl, scope: inferJsonlFileScope(jsonl) });
+  } else if (dir) {
+    if (!existsSync(dir)) throw new Error(`missing ${dir}`);
+    for (const f of await collectJsonlFiles(dir)) {
+      files.push({ path: f, scope: inferJsonlFileScope(f) });
+    }
   } else if (tgz) {
     if (!existsSync(tgz)) throw new Error(`missing ${tgz}`);
-    const dir = join(tmpdir(), `jev-import-${Date.now()}`);
-    await mkdir(dir, { recursive: true });
+    const extractDir = join(tmpdir(), `jev-import-${Date.now()}`);
+    await mkdir(extractDir, { recursive: true });
     try {
-      await extractTgz(tgz, dir);
-      for (const f of await collectJsonlFiles(dir)) {
-        const base = f.split("/").pop() ?? "";
-        const guess = base.replace(/\.jsonl$/i, "").replace(/.*[-_]/, "").toUpperCase();
-        files.push({ path: f, coin: /^[A-Z]{2,6}$/.test(guess) ? guess : undefined });
+      await extractTgz(tgz, extractDir);
+      for (const f of await collectJsonlFiles(extractDir)) {
+        files.push({ path: f, scope: inferJsonlFileScope(f) });
       }
     } finally {
-      await rm(dir, { recursive: true, force: true });
+      await rm(extractDir, { recursive: true, force: true });
     }
   } else {
-    throw new Error("pass --tgz or --jsonl");
+    throw new Error("pass --tgz, --dir, or --jsonl");
   }
+  if (!files.length) throw new Error("no .jsonl files found");
   let totalImported = 0;
   for (const f of files) {
-    const res = await postJsonl(api, token, f.path, f.coin);
+    const res = await postJsonl(api, token, f.path, f.scope);
     totalImported += res.imported;
-    console.log(`${f.path}: imported ${res.imported} (total events ${res.total}) coins=${res.coins.join(",")}`);
+    console.log(`${f.path} scope=${f.scope ?? "none"}: imported ${res.imported} (total events ${res.total}) coins=${res.coins.join(",")}`);
   }
   const status = await fetch(`${api.replace(/\/+$/, "")}/admin/import-status`, {
     headers: { authorization: `Bearer ${token}` },

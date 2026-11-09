@@ -1,6 +1,7 @@
 import { config, assertRestorationSafety } from "./config";
 import { Feed } from "./feed";
 import { HistoryStore } from "./history-store";
+import { LEGACY_UNSCOPED_COIN } from "./history-import";
 import { loadHistoryBundle } from "./r2-history";
 import { Market } from "./market";
 import { createModel } from "./model";
@@ -45,6 +46,8 @@ const meta: Meta = {
   executionEnabled: config.executionEnabled,
   networkLabel: config.networkLabel,
   historicalThroughTs: historyStore.historicalThrough(),
+  legacyUnscopedCoin: LEGACY_UNSCOPED_COIN,
+  legacyUnscopedCount: historyStore.stats().coins[LEGACY_UNSCOPED_COIN]?.events ?? 0,
 };
 
 let server: ReturnType<typeof startServer> | undefined;
@@ -127,6 +130,7 @@ server = startServer(meta, views, {
   history: historyStore,
   onHistoryImported: async () => {
     meta.historicalThroughTs = historyStore.historicalThrough();
+    meta.legacyUnscopedCount = historyStore.stats().coins[LEGACY_UNSCOPED_COIN]?.events ?? 0;
     server?.invalidateSnapshot();
   },
 });

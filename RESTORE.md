@@ -4,13 +4,30 @@ Safe replay of archived desk history plus **read-only** Hyperliquid testnet acco
 
 ## Archive (do not delete)
 
-R2 bucket `jev-trade-mig-archive` (source, read-only for importers):
+R2 bucket `jev-trade-mig-archive` (source; importers read, never rewrite these keys):
 
 | Key | Contents |
 | --- | --- |
-| `mig1/public-history.tgz` | 9 JSONL files, ~43k block rows through ~2026-09-18 |
-| `mig1/wallets-public.json` | Public wallet labels |
-| `mig1/hl-account-states.json` | Optional account snapshots |
+| `mig1/public-history.tgz` | Original export (9 JSONL + meta) |
+| `mig1/restore-history-sanitized.tar.gz` | Optional security-reviewed copy for coordinators (~1MB, same layout) |
+| `mig1/wallets-public.json` / `mig1/hl-account-states.json` | Sanitized meta snapshots |
+
+Layout inside the tarball:
+
+```
+history/events.jsonl          # 25110 rows, **no** top-level `coin` → import scope `__legacy_unscoped__`
+history/events-BTC.jsonl      # 3727
+history/events-ETH.jsonl      # 3723
+history/events-SOL.jsonl      # 3682
+history/events-DOGE.jsonl     # 2408
+history/events-BNB.jsonl      # 1589
+history/events-AVAX.jsonl     # 817
+history/events-GOLD.jsonl     # 1023
+history/events-NVDA.jsonl     # 1023
+meta/*.sanitized.*
+```
+
+**43 102** parseable `BlockEvent` lines total. Legacy `events.jsonl` must **not** be labeled BTC or any sleeve coin. Per-sleeve files may include `coin` on each row. `fill` is always `null` in this archive.
 
 Runtime bundle (writable by the bot after import, separate from `mig1/public-history.tgz`):
 
@@ -44,30 +61,51 @@ Set on the **container** via `cloudflare/bot/wrangler.jsonc` vars + secrets (see
 ## Import steps (coordinator)
 
 1. Deploy bot with restoration vars and `HISTORY_IMPORT_SECRET`.
-2. Download archive **locally** (do not expose bucket publicly):
+2. Upload sanitized bundle to R2 (optional; does not replace `mig1/public-history.tgz`):
 
 ```sh
-wrangler r2 object get jev-trade-mig-archive/mig1/public-history.tgz --file=public-history.tgz
+wrangler r2 object put jev-trade-mig-archive/mig1/restore-history-sanitized.tar.gz \
+  --file=./restore-history-sanitized.tar.gz \
+  --content-type=application/gzip
 ```
 
-3. Stream JSONL into the bot (idempotent; safe to re-run):
+3. Download and extract locally (private; bucket is not public):
+
+```sh
+wrangler r2 object get jev-trade-mig-archive/mig1/restore-history-sanitized.tar.gz --file=restore.tgz
+# or: wrangler r2 object get jev-trade-mig-archive/mig1/public-history.tgz --file=public-history.tgz
+tar -xzf restore.tgz
+```
+
+4. Import all JSONL with filename-derived scopes (idempotent; safe to re-run):
 
 ```sh
 export HISTORY_IMPORT_SECRET=...
 bun run scripts/import-migration-archive.ts \
   --api https://bot.jev-trade.com \
   --token "$HISTORY_IMPORT_SECRET" \
-  --tgz ./public-history.tgz
+  --dir ./history
 ```
 
-Or one file:
+Or one tarball in one step:
 
 ```sh
 bun run scripts/import-migration-archive.ts \
   --api https://bot.jev-trade.com \
   --token "$HISTORY_IMPORT_SECRET" \
-  --jsonl ./btc.jsonl --coin BTC
+  --tgz ./restore.tgz
 ```
+
+Single file (scope from filename only):
+
+```sh
+bun run scripts/import-migration-archive.ts \
+  --api https://bot.jev-trade.com \
+  --token "$HISTORY_IMPORT_SECRET" \
+  --jsonl ./history/events.jsonl
+```
+
+Legacy rows appear under `historyByCoin.__legacy_unscoped__` and in `meta.legacyUnscopedCount`, not under BTC.
 
 4. Verify:
 
@@ -83,7 +121,7 @@ curl -sS https://bot.jev-trade.com/history | head -c 200
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/admin/import-history` | Body: raw JSONL (`application/x-ndjson`). Optional header `X-Coin`. Optional `Content-Encoding: gzip`. |
+| `POST` | `/admin/import-history` | Body: raw JSONL (`application/x-ndjson`). Optional header `X-File-Scope` (e.g. `__legacy_unscoped__`, `BTC`). Optional `Content-Encoding: gzip`. |
 | `GET` | `/admin/import-status` | Import stats. |
 
 No unauthenticated write routes. Archive keys under `mig1/public-history.tgz` are never modified by the bot.

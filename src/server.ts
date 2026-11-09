@@ -104,7 +104,7 @@ export function startServer(meta: Meta, sleeves: SleeveView[], opts: ServerOpts)
   async function handleImport(req: Request): Promise<Response> {
     const denied = assertImportAuth(req);
     if (denied) return denied;
-    const coinHint = req.headers.get("x-coin")?.trim() || undefined;
+    const fileScope = req.headers.get("x-file-scope")?.trim() || req.headers.get("x-coin")?.trim() || undefined;
     const encoding = req.headers.get("content-encoding") ?? "";
     let text: string;
     const body = await req.arrayBuffer();
@@ -113,7 +113,7 @@ export function startServer(meta: Meta, sleeves: SleeveView[], opts: ServerOpts)
     } else {
       text = new TextDecoder().decode(body);
     }
-    const result = opts.history.mergeJsonl(text, coinHint);
+    const result = opts.history.mergeJsonl(text, fileScope);
     await opts.history.saveAll();
     invalidateSnap();
     if (config.historyPersistR2Key) {

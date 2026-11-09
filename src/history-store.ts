@@ -76,33 +76,19 @@ export class HistoryStore {
     for (const coin of this.byCoin.keys()) await this.saveCoin(coin);
   }
 
-  mergeJsonl(text: string, coinHint?: string): { imported: number; total: number; coins: string[] } {
-    const { events, tape } = parseJsonl(text);
+  mergeJsonl(text: string, fileScope?: string): { imported: number; total: number; coins: string[] } {
+    const { events, tape } = parseJsonl(text, { fileScope });
     const byCoinEvents = new Map<string, BlockEvent[]>();
     for (const e of events) {
       const list = byCoinEvents.get(e.coin) ?? [];
       list.push(e);
       byCoinEvents.set(e.coin, list);
     }
-    if (coinHint && events.length && !byCoinEvents.has(coinHint)) {
-      byCoinEvents.set(coinHint, events.map((e) => ({ ...e, coin: coinHint })));
-    }
     let imported = 0;
     const coins: string[] = [];
     for (const [coin, incoming] of byCoinEvents) {
-      imported += this.mergeCoin(coin, incoming, []);
+      imported += this.mergeCoin(coin, incoming, tape.length && fileScope === coin ? tape : []);
       coins.push(coin);
-    }
-    if (tape.length) {
-      const coin = coinHint ?? coins[0];
-      if (coin) {
-        const row = this.byCoin.get(coin);
-        if (row) {
-          row.tape = dedupeSortTape(row.tape.concat(tape));
-          row.updatedAt = Date.now();
-          this.byCoin.set(coin, row);
-        }
-      }
     }
     const total = [...this.byCoin.values()].reduce((n, r) => n + r.events.length, 0);
     return { imported, total, coins: [...new Set(coins)] };

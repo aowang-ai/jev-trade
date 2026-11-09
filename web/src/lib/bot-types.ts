@@ -156,6 +156,9 @@ export interface Meta {
   networkLabel?: string;
   /** Latest imported block event timestamp (ms), when known. */
   historicalThroughTs?: number | null;
+  /** Key under historyByCoin for legacy events.jsonl rows (no top-level coin). */
+  legacyUnscopedCoin?: string;
+  legacyUnscopedCount?: number;
 }
 
 export interface Timing {
