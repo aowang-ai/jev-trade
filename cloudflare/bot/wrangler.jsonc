@@ -27,7 +27,7 @@
       "class_name": "JevBotContainer",
       "image": "../../Dockerfile",
       "max_instances": 1,
-      "instance_type": "standard-1"
+      "instance_type": "basic"
     }
   ],
   "durable_objects": {
